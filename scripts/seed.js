@@ -1,0 +1,110 @@
+import { createWalletClient, createPublicClient, http, defineChain, parseUnits } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+dotenv.config();
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const arcTestnet = defineChain({
+  id: 5042002,
+  name: 'Arc Testnet',
+  nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.testnet.arc.network'] } },
+});
+
+const FACTORFI_ADDRESS = '0x470f9ec27d1d8aecf15e57b149d70fd66aa295d6';
+const USDC_ADDRESS = '0x3600000000000000000000000000000000000000';
+
+async function main() {
+  console.log('🌱 Starting FactorFi Data Seed (Single Wallet Mode)...');
+
+  const publicClient = createPublicClient({ chain: arcTestnet, transport: http() });
+  
+  const deployerAccount = privateKeyToAccount(`0x${process.env.PRIVATE_KEY}`);
+  const wallet = createWalletClient({ account: deployerAccount, chain: arcTestnet, transport: http() });
+  
+  console.log('Wallet:', deployerAccount.address);
+
+  const waitForTx = async (hash) => {
+    process.stdout.write(`Waiting for tx ${hash.slice(0,10)}... `);
+    await publicClient.waitForTransactionReceipt({ hash });
+    console.log('✅');
+  };
+
+  const { encodeFunctionData } = await import('viem');
+
+  // 1. Register Anchor (if not already)
+  try {
+    console.log('\n🏢 Registering Anchor...');
+    const regData = encodeFunctionData({
+      abi: [{ name: 'registerAnchor', type: 'function', inputs: [{type: 'string'}, {type: 'uint256'}] }],
+      args: ['GlobalTrade Corp', 980n]
+    });
+    const hash = await wallet.sendTransaction({ to: FACTORFI_ADDRESS, data: regData });
+    await waitForTx(hash);
+  } catch (e) {
+    console.log('Already registered or failed. Continuing...');
+  }
+
+  // 2. Submit Invoices
+  console.log('\n📄 Submitting Invoices...');
+  const thirtyDays = BigInt(Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60);
+  
+  const subData = encodeFunctionData({
+    abi: [{ name: 'submitInvoice', type: 'function', inputs: [{type:'address'}, {type:'uint256'}, {type:'uint256'}, {type:'string'}] }],
+    args: [deployerAccount.address, parseUnits('0.1', 6), thirtyDays, 'Cloud Hosting Services Q4']
+  });
+  let hash = await wallet.sendTransaction({ to: FACTORFI_ADDRESS, data: subData });
+  await waitForTx(hash);
+
+  // 3. Get latest ID
+  const invoiceCountData = await publicClient.readContract({
+    address: FACTORFI_ADDRESS,
+    abi: [{ name: 'nextInvoiceId', type: 'function', inputs: [], outputs: [{type:'uint256'}] }],
+    functionName: 'nextInvoiceId'
+  });
+  const id = Number(invoiceCountData) - 1;
+  console.log('Latest Invoice ID:', id);
+
+  // 4. Approve Invoice
+  console.log('\n✅ Approving Invoice...');
+  const appData = encodeFunctionData({
+    abi: [{ name: 'approveInvoice', type: 'function', inputs: [{type:'uint256'}] }],
+    args: [BigInt(id)]
+  });
+  hash = await wallet.sendTransaction({ to: FACTORFI_ADDRESS, data: appData });
+  await waitForTx(hash);
+
+  // 5. Fund Invoice
+  console.log('\n💰 Funding Invoice...');
+  const approveData = encodeFunctionData({
+    abi: [{ name: 'approve', type: 'function', inputs: [{type:'address'}, {type:'uint256'}] }],
+    args: [FACTORFI_ADDRESS, parseUnits('100', 6)]
+  });
+  hash = await wallet.sendTransaction({ to: USDC_ADDRESS, data: approveData });
+  await waitForTx(hash);
+
+  const fundData = encodeFunctionData({
+    abi: [{ name: 'fundInvoice', type: 'function', inputs: [{type:'uint256'}, {type:'uint256'}] }],
+    args: [BigInt(id), 200n] // 2% discount
+  });
+  hash = await wallet.sendTransaction({ to: FACTORFI_ADDRESS, data: fundData });
+  await waitForTx(hash);
+
+  // 6. Settle Invoice
+  console.log('\n🏦 Settling Invoice...');
+  const settleData = encodeFunctionData({
+    abi: [{ name: 'settleInvoice', type: 'function', inputs: [{type:'uint256'}] }],
+    args: [BigInt(id)]
+  });
+  hash = await wallet.sendTransaction({ to: FACTORFI_ADDRESS, data: settleData });
+  await waitForTx(hash);
+
+  console.log('\n🎉 Seed complete! Dashboard should now show real stats, settled volume, and a lively event feed.');
+}
+
+main().catch(console.error);

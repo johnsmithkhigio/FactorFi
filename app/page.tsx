@@ -1,0 +1,110 @@
+'use client'
+
+import { useState } from 'react'
+import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { useAccount, useReadContract } from 'wagmi'
+import { LayoutDashboard, FileText, Building2, TrendingUp, Shield, ArrowRightLeft, ExternalLink, Hexagon } from 'lucide-react'
+import { USDC_ADDRESS_ARC, usdcAbi } from '@/lib/contracts'
+import { formatUSDC, getExplorerAddressLink } from '@/lib/utils'
+
+import DashboardView from './views/DashboardView'
+import SupplierView from './views/SupplierView'
+import AnchorView from './views/AnchorView'
+import InvestorView from './views/InvestorView'
+import BridgeView from './views/BridgeView'
+import CreditView from './views/CreditView'
+
+type View = 'dashboard' | 'supplier' | 'anchor' | 'investor' | 'bridge' | 'credit'
+
+const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
+  { id: 'supplier', label: 'Supplier', icon: <FileText size={16} /> },
+  { id: 'anchor', label: 'Anchor', icon: <Building2 size={16} /> },
+  { id: 'investor', label: 'Invest', icon: <TrendingUp size={16} /> },
+  { id: 'bridge', label: 'Bridge', icon: <ArrowRightLeft size={16} /> },
+  { id: 'credit', label: 'Credit', icon: <Shield size={16} /> },
+]
+
+export default function FactorFiApp() {
+  const [activeView, setActiveView] = useState<View>('dashboard')
+  const { address, isConnected } = useAccount()
+
+  const { data: usdcBalance } = useReadContract({
+    address: USDC_ADDRESS_ARC,
+    abi: usdcAbi,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    query: { enabled: !!address, refetchInterval: 10000 },
+  })
+
+  const renderView = () => {
+    switch (activeView) {
+      case 'dashboard': return <DashboardView />
+      case 'supplier': return <SupplierView />
+      case 'anchor': return <AnchorView />
+      case 'investor': return <InvestorView />
+      case 'bridge': return <BridgeView />
+      case 'credit': return <CreditView />
+      default: return <DashboardView />
+    }
+  }
+
+  return (
+    <div className="app-shell">
+      {/* Top Navbar */}
+      <header className="navbar">
+        <div className="navbar-inner">
+          <div className="navbar-left">
+            <div className="navbar-brand" onClick={() => setActiveView('dashboard')}>
+              <h1>
+                <Hexagon className="text-primary" size={22} fill="currentColor" fillOpacity={0.2} strokeWidth={2} />
+                FactorFi
+              </h1>
+              <span className="brand-tag">Arc</span>
+            </div>
+
+            <nav className="navbar-nav">
+              {NAV_ITEMS.map((item) => (
+                <button
+                  key={item.id}
+                  className={`nav-tab ${activeView === item.id ? 'active' : ''}`}
+                  onClick={() => setActiveView(item.id)}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          <div className="navbar-right">
+            <div className="network-badge">
+              <span className="dot" />
+              Arc Testnet
+            </div>
+            {isConnected && usdcBalance !== undefined && (
+              <div className="balance-pill">
+                <span className="balance-amount">
+                  {formatUSDC(usdcBalance as bigint)} USDC
+                </span>
+                <a href={getExplorerAddressLink(address!)} target="_blank" rel="noopener noreferrer" className="link-explorer">
+                  <ExternalLink size={12} />
+                </a>
+              </div>
+            )}
+            <div className="connect-btn-wrapper">
+              <ConnectButton showBalance={false} chainStatus="none" accountStatus="address" />
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="main-content">
+        <div className="page-content animate-in" key={activeView}>
+          {renderView()}
+        </div>
+      </main>
+    </div>
+  )
+}
