@@ -61,6 +61,10 @@ contract FactorFi {
         uint256 totalVolume;
         uint256 avgSettlementTime; // in seconds
         uint256 onTimeRateBps;     // basis points (9500 = 95%)
+        uint256 totalAmountFactored;
+        uint256 totalAmountSettled;
+        uint256 weightedAvgSettlementDays;
+        uint256 highestSingleInvoiceValue;
     }
     mapping(address => CreditProfile) public creditProfiles;
 
@@ -131,8 +135,8 @@ contract FactorFi {
         totalSettledVolume += faceValue;
 
         // Update credit profiles
-        _updateCreditProfile(msg.sender, true, inv.settledAt - inv.fundedAt);
-        _updateCreditProfile(inv.supplier, true, inv.settledAt - inv.createdAt);
+        _updateCreditProfile(msg.sender, true, inv.settledAt - inv.fundedAt, faceValue);
+        _updateCreditProfile(inv.supplier, true, inv.settledAt - inv.createdAt, faceValue);
 
         emit InvoiceSettled(_invoiceId, msg.sender, investorPayout, protocolFee);
     }
@@ -220,7 +224,7 @@ contract FactorFi {
 
     // ========== INTERNAL ==========
 
-    function _updateCreditProfile(address _entity, bool _onTime, uint256 _settlementTime) internal {
+    function _updateCreditProfile(address _entity, bool _onTime, uint256 _settlementTime, uint256 _amount) internal {
         CreditProfile storage profile = creditProfiles[_entity];
 
         if (_onTime) {
@@ -229,7 +233,31 @@ contract FactorFi {
             profile.invoicesDefaulted++;
         }
 
-        profile.totalVolume += 1; // simplified
+        uint256 previousAmountSettled = profile.totalAmountSettled;
+        profile.totalAmountFactored += _amount;
+        profile.totalVolume += 1;
+        
+        if (_onTime) {
+            profile.totalAmountSettled += _amount;
+        }
+
+        if (_amount > profile.highestSingleInvoiceValue) {
+            profile.highestSingleInvoiceValue = _amount;
+        }
+
+        // Rolling Weighted Average Calculation:
+        if (_onTime && profile.totalAmountSettled > 0) {
+            uint256 settlementDays = _settlementTime / 86400;
+            if (settlementDays == 0 && _settlementTime > 0) {
+                settlementDays = 1; // Safeguard rounding issues
+            }
+            if (previousAmountSettled == 0) {
+                profile.weightedAvgSettlementDays = settlementDays;
+            } else {
+                profile.weightedAvgSettlementDays = ((profile.weightedAvgSettlementDays * previousAmountSettled) + (settlementDays * _amount)) / profile.totalAmountSettled;
+            }
+        }
+
         uint256 total = profile.invoicesSettled + profile.invoicesDefaulted;
         profile.onTimeRateBps = total > 0 ? (profile.invoicesSettled * 10000) / total : 0;
         profile.avgSettlementTime = (profile.avgSettlementTime + _settlementTime) / 2;
