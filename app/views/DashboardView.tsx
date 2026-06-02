@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useAccount, useReadContract, usePublicClient } from 'wagmi'
+import { useReadContract, usePublicClient } from 'wagmi'
 import { formatUnits } from 'viem'
 import {
   DollarSign, FileText, TrendingUp, CheckCircle, Clock,
@@ -10,6 +10,7 @@ import {
 import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi, USDC_ADDRESS_ARC, usdcAbi, USDC_DECIMALS } from '@/lib/contracts'
 import { formatUSDC, truncateAddress, getExplorerTxLink, getExplorerAddressLink, STATUS_LABELS, timeAgo } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useUnifiedAccount } from '@/lib/web3-provider'
 
 interface InvoiceEvent {
   type: 'submitted' | 'approved' | 'funded' | 'settled'
@@ -21,7 +22,7 @@ interface InvoiceEvent {
 }
 
 export default function DashboardView() {
-  const { address } = useAccount()
+  const { address } = useUnifiedAccount()
   const publicClient = usePublicClient()
   const [recentEvents, setRecentEvents] = useState<InvoiceEvent[]>([])
   const [invoices, setInvoices] = useState<any[]>([])

@@ -2,11 +2,12 @@
 
 import { useState } from 'react'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { useAccount, useReadContract } from 'wagmi'
-import { LayoutDashboard, FileText, Building2, TrendingUp, Shield, ArrowRightLeft, ExternalLink, Hexagon } from 'lucide-react'
+import { useReadContract } from 'wagmi'
+import { LayoutDashboard, FileText, Building2, TrendingUp, Shield, ArrowRightLeft, ExternalLink, Hexagon, Home } from 'lucide-react'
 import { USDC_ADDRESS_ARC, usdcAbi } from '@/lib/contracts'
 import { formatUSDC, getExplorerAddressLink } from '@/lib/utils'
 
+import LandingView from './views/LandingView'
 import DashboardView from './views/DashboardView'
 import SupplierView from './views/SupplierView'
 import AnchorView from './views/AnchorView'
@@ -14,9 +15,13 @@ import InvestorView from './views/InvestorView'
 import BridgeView from './views/BridgeView'
 import CreditView from './views/CreditView'
 
-type View = 'dashboard' | 'supplier' | 'anchor' | 'investor' | 'bridge' | 'credit'
+import { useUnifiedAccount } from '@/lib/web3-provider'
+import EmbeddedAuth from './components/EmbeddedAuth'
+
+type View = 'landing' | 'dashboard' | 'supplier' | 'anchor' | 'investor' | 'bridge' | 'credit'
 
 const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode }[] = [
+  { id: 'landing', label: 'Home', icon: <Home size={16} /> },
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
   { id: 'supplier', label: 'Supplier', icon: <FileText size={16} /> },
   { id: 'anchor', label: 'Anchor', icon: <Building2 size={16} /> },
@@ -26,8 +31,8 @@ const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode }[] = [
 ]
 
 export default function FactorFiApp() {
-  const [activeView, setActiveView] = useState<View>('dashboard')
-  const { address, isConnected } = useAccount()
+  const [activeView, setActiveView] = useState<View>('landing')
+  const { address, isConnected, providerType } = useUnifiedAccount()
 
   const { data: usdcBalance } = useReadContract({
     address: USDC_ADDRESS_ARC,
@@ -39,13 +44,14 @@ export default function FactorFiApp() {
 
   const renderView = () => {
     switch (activeView) {
+      case 'landing': return <LandingView onLaunchApp={(v) => setActiveView(v)} />
       case 'dashboard': return <DashboardView />
       case 'supplier': return <SupplierView />
       case 'anchor': return <AnchorView />
       case 'investor': return <InvestorView />
       case 'bridge': return <BridgeView />
       case 'credit': return <CreditView />
-      default: return <DashboardView />
+      default: return <LandingView onLaunchApp={(v) => setActiveView(v)} />
     }
   }
 
@@ -55,7 +61,7 @@ export default function FactorFiApp() {
       <header className="navbar">
         <div className="navbar-inner">
           <div className="navbar-left">
-            <div className="navbar-brand" onClick={() => setActiveView('dashboard')}>
+            <div className="navbar-brand" onClick={() => setActiveView('landing')}>
               <h1>
                 <Hexagon className="text-primary" size={22} fill="currentColor" fillOpacity={0.2} strokeWidth={2} />
                 FactorFi
@@ -92,8 +98,11 @@ export default function FactorFiApp() {
                 </a>
               </div>
             )}
-            <div className="connect-btn-wrapper">
-              <ConnectButton showBalance={false} chainStatus="none" accountStatus="address" />
+            <div className="connect-btn-wrapper" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <EmbeddedAuth />
+              {providerType !== 'circle' && (
+                <ConnectButton showBalance={false} chainStatus="none" accountStatus="address" />
+              )}
             </div>
           </div>
         </div>
