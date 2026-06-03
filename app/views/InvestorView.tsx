@@ -5,7 +5,19 @@ import { useWriteContract, useReadContract, useWaitForTransactionReceipt } from 
 import { parseUnits, formatUnits } from 'viem'
 import { TrendingUp, ExternalLink, DollarSign, Settings, Play, CheckCircle, Activity, ShieldCheck, Cpu, ArrowRightLeft, Database } from 'lucide-react'
 import { toast } from 'sonner'
-import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi, USDC_ADDRESS_ARC, usdcAbi, USDC_DECIMALS, AUTO_FACTOR_VAULT_ADDRESS, autoFactorVaultAbi } from '@/lib/contracts'
+import {
+  FACTORFI_CONTRACT_ADDRESS,
+  factorFiAbi,
+  USDC_ADDRESS_ARC,
+  usdcAbi,
+  USDC_DECIMALS,
+  AUTO_FACTOR_VAULT_ADDRESS,
+  autoFactorVaultAbi,
+  INVOICE_RECEIPT_NFT_ADDRESS,
+  invoiceReceiptNftAbi,
+  FACTORFI_MARKETPLACE_ADDRESS,
+  factorFiMarketplaceAbi
+} from '@/lib/contracts'
 import { getExplorerTxLink, formatUSDC, STATUS_LABELS, formatDate } from '@/lib/utils'
 import { useUnifiedAccount } from '@/lib/web3-provider'
 import { formatTokenAmount, getTokenByAddress } from '@/lib/token-registry'
@@ -28,6 +40,9 @@ export default function InvestorView() {
   const [vaultActive, setVaultActive] = useState(true)
   const [scanLogs, setScanLogs] = useState<{time: string, msg: string, type: 'info'|'success'|'warn'}[]>([])
 
+  // Secondary OTC Marketplace State
+  const [listPriceInput, setListPriceInput] = useState('')
+
   // Contract write triggers
   const { writeContract: approveToken, isPending: approvePending } = useWriteContract()
   const { writeContract: fundInvoice, data: fundHash, isPending: fundPending } = useWriteContract()
@@ -35,6 +50,10 @@ export default function InvestorView() {
 
   // Vault write triggers
   const { writeContract: writeVault, isPending: vaultPending } = useWriteContract()
+
+  // Marketplace & NFT write triggers
+  const { writeContract: writeMarket, isPending: marketPending } = useWriteContract()
+  const { writeContract: writeNft, isPending: nftPending } = useWriteContract()
 
   // Log auto-scroll
   const logEndRef = useRef<HTMLDivElement>(null)
@@ -93,10 +112,36 @@ export default function InvestorView() {
 
   const inv = invoiceData as any
 
+  // --- Real-time Secondary Marketplace Queries ---
+  const { data: isTokenizedData, refetch: refetchIsTokenized } = useReadContract({
+    address: FACTORFI_CONTRACT_ADDRESS,
+    abi: factorFiAbi,
+    functionName: 'isTokenized',
+    args: lookupId ? [BigInt(lookupId)] : undefined,
+    query: { enabled: !!lookupId },
+  })
+
+  const { data: nftOwnerData, refetch: refetchNftOwner } = useReadContract({
+    address: INVOICE_RECEIPT_NFT_ADDRESS,
+    abi: invoiceReceiptNftAbi,
+    functionName: 'ownerOf',
+    args: lookupId && isTokenizedData ? [BigInt(lookupId)] : undefined,
+    query: { enabled: !!lookupId && !!isTokenizedData },
+  })
+
+  const { data: listingsData, refetch: refetchListings } = useReadContract({
+    address: FACTORFI_MARKETPLACE_ADDRESS,
+    abi: factorFiMarketplaceAbi,
+    functionName: 'getActiveListings',
+  })
+
   const refetchAllVaultState = () => {
     refetchTvl()
     refetchAlloc()
     refetchShares()
+    refetchListings()
+    refetchIsTokenized()
+    refetchNftOwner()
   }
 
   // Auto-scroll scan simulation logger
@@ -204,6 +249,93 @@ export default function InvestorView() {
         refetchAllVaultState()
       },
       onError: (e) => toast.error('Withdrawal failed', { description: e.message.slice(0, 85) })
+    })
+  }
+
+  // --- Secondary OTC Marketplace Action Handlers ---
+  const handleTokenize = () => {
+    if (!lookupId) return toast.error('Enter a valid invoice ID')
+    if (!inv || inv.amount === BigInt(0)) return toast.error('Invoice details not loaded')
+    if (inv.status !== 2) return toast.error('Invoice must be in Funded status to tokenize')
+    if (inv.investor.toLowerCase() !== address?.toLowerCase()) return toast.error('Only the invoice investor can tokenize')
+
+    writeNft({
+      address: FACTORFI_CONTRACT_ADDRESS,
+      abi: factorFiAbi,
+      functionName: 'tokenizeInvoice',
+      args: [BigInt(lookupId)]
+    }, {
+      onSuccess: () => {
+        toast.success('Position successfully wrapped as an ERC-721 Invoice Receipt NFT!')
+        refetchIsTokenized()
+        refetchNftOwner()
+        refetchAllVaultState()
+      },
+      onError: (e) => toast.error('Tokenization failed', { description: e.message.slice(0, 80) })
+    })
+  }
+
+  const handleListInvoice = () => {
+    if (!lookupId || !listPriceInput) return toast.error('Enter list price')
+    const priceAmt = parseUnits(listPriceInput, 6)
+
+    // Approve the secondary marketplace contract to transfer the receipt NFT
+    writeNft({
+      address: INVOICE_RECEIPT_NFT_ADDRESS,
+      abi: invoiceReceiptNftAbi,
+      functionName: 'approve',
+      args: [FACTORFI_MARKETPLACE_ADDRESS, BigInt(lookupId)]
+    }, {
+      onSuccess: () => {
+        toast.info('NFT approval confirmed! Placing OTC list order...')
+        writeMarket({
+          address: FACTORFI_MARKETPLACE_ADDRESS,
+          abi: factorFiMarketplaceAbi,
+          functionName: 'listInvoice',
+          args: [BigInt(lookupId), priceAmt]
+        }, {
+          onSuccess: () => {
+            toast.success('Invoice listed successfully on secondary marketplace!')
+            setListPriceInput('')
+            refetchListings()
+            refetchAllVaultState()
+          },
+          onError: (e) => toast.error('Listing failed', { description: e.message.slice(0, 80) })
+        })
+      },
+      onError: (e) => toast.error('NFT approval failed', { description: e.message.slice(0, 80) })
+    })
+  }
+
+  const handleBuyListing = (tokenId: bigint, price: bigint, tokenAddress: string) => {
+    const tokenSymbol = getTokenByAddress(tokenAddress)?.symbol || 'USDC'
+
+    approveToken({
+      address: tokenAddress as `0x${string}`,
+      abi: usdcAbi,
+      functionName: 'approve',
+      args: [FACTORFI_MARKETPLACE_ADDRESS, price]
+    }, {
+      onSuccess: () => {
+        toast.info(`${tokenSymbol} allowance approved! Purchasing receivable NFT...`)
+        writeMarket({
+          address: FACTORFI_MARKETPLACE_ADDRESS,
+          abi: factorFiMarketplaceAbi,
+          functionName: 'buyInvoice',
+          args: [tokenId]
+        }, {
+          onSuccess: () => {
+            toast.success('OTC invoice bought successfully! Repayment route is now pointing to you.')
+            refetchListings()
+            refetchInvoice()
+            refetchIsTokenized()
+            refetchNftOwner()
+            refetchAllVaultState()
+          },
+          onError: (e) => toast.error('Purchase failed', { description: e.message.slice(0, 80) })
+        })
+      },
+      onError: (e) => toast.error('Token approval failed', { description: e.message.slice(0, 80) })
     })
   }
 
@@ -389,6 +521,111 @@ export default function InvestorView() {
           <button className="btn btn-primary" style={{ marginTop: 8, width: '100%', gap: 6 }} onClick={() => toast.success('Keeper rules updated locally!')}>
             <Settings size={16} /> Apply Risk Parameter Guidelines
           </button>
+        </div>
+      </div>
+
+      {/* Secondary OTC Receivables Marketplace Row */}
+      <div className="card" style={{ marginTop: 24 }}>
+        <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyItems: 'center', gap: 8, borderBottom: '1px solid var(--ff-border)', paddingBottom: 12 }}>
+          <ArrowRightLeft className="icon-pulse" style={{ color: 'var(--ff-primary)' }} size={20} />
+          <span className="card-title" style={{ fontSize: 16 }}>Secondary OTC Receivables Marketplace</span>
+        </div>
+
+        <div className="grid-2" style={{ marginTop: 16 }}>
+          {/* Left Console: Tokenize & List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingRight: 16, borderRight: '1px solid var(--ff-border)' }}>
+            <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', color: 'var(--ff-text-muted)', letterSpacing: '0.05em' }}>Receivable Tokenization Console</h4>
+            
+            {inv && inv.amount > BigInt(0) && Number(inv.status) === 2 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ padding: 12, background: 'var(--ff-bg)', borderRadius: 8, border: '1px solid var(--ff-border)', fontSize: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ color: 'var(--ff-text-secondary)' }}>Invoice ID:</span>
+                    <span style={{ fontWeight: 600 }}>#{inv.id.toString()}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ color: 'var(--ff-text-secondary)' }}>Face Value:</span>
+                    <span style={{ fontWeight: 600, fontFamily: 'var(--ff-mono)' }}>{formatTokenAmount(inv.amount, inv.token)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--ff-text-secondary)' }}>Current Investor:</span>
+                    <span style={{ fontWeight: 500 }}>{inv.investor.slice(0, 10)}...</span>
+                  </div>
+                </div>
+
+                {!isTokenizedData ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <p style={{ margin: 0, fontSize: 12, color: 'var(--ff-text-muted)' }}>
+                      This funded receivable is not tokenized yet. Wrap it into an ERC-721 Receipt NFT to enable secondary OTC trading before maturity.
+                    </p>
+                    <button className="btn btn-primary" onClick={handleTokenize} disabled={nftPending} style={{ width: '100%' }}>
+                      {nftPending ? 'Wrapping Position...' : 'Tokenize Position (Mint NFT)'}
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'rgba(74, 222, 128, 0.1)', border: '1px solid var(--ff-success)', borderRadius: 6, color: 'var(--ff-success)', fontSize: 11, fontWeight: 600, width: 'fit-content' }}>
+                      <ShieldCheck size={12} /> Wrapped as ffRECEIPT NFT
+                    </div>
+                    <div style={{ fontSize: 12 }}>
+                      <span style={{ color: 'var(--ff-text-muted)' }}>NFT Receipt Owner: </span>
+                      <span style={{ fontWeight: 500, color: 'var(--ff-primary)' }}>
+                        {nftOwnerData ? (nftOwnerData as string).slice(0, 12) + '...' : 'Loading...'}
+                      </span>
+                    </div>
+
+                    {nftOwnerData && (nftOwnerData as string).toLowerCase() === address?.toLowerCase() ? (
+                      <div className="form-group" style={{ marginTop: 8, borderTop: '1px solid var(--ff-border)', paddingTop: 12 }}>
+                        <label className="form-label">OTC Listing Price (Tokens)</label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input className="form-input" type="number" placeholder="9800" value={listPriceInput} onChange={e => setListPriceInput(e.target.value)} />
+                          <button className="btn btn-primary" onClick={handleListInvoice} disabled={nftPending || marketPending}>
+                            List Invoice
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: 12, color: 'var(--ff-text-muted)' }}>
+                        Only the current NFT receipt owner can create listing orders.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ padding: '24px 12px', border: '1px dashed var(--ff-border)', borderRadius: 8, textAlign: 'center', color: 'var(--ff-text-muted)', fontSize: 12 }}>
+                Use the manual lookup form above to load a <span style={{ color: 'var(--ff-primary)' }}>Funded (status = 2)</span> invoice.
+              </div>
+            )}
+          </div>
+
+          {/* Right Console: Live OTC Board */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', color: 'var(--ff-text-muted)', letterSpacing: '0.05em' }}>Live OTC Trading Board</h4>
+
+            {listingsData && (listingsData as any[]).length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 260, overflowY: 'auto' }}>
+                {(listingsData as any[]).map((listing, idx) => (
+                  <div key={idx} style={{ padding: 12, background: 'var(--ff-bg)', borderRadius: 8, border: '1px solid var(--ff-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>Invoice Receipt #{listing.tokenId.toString()}</div>
+                      <div style={{ fontSize: 11, color: 'var(--ff-text-muted)' }}>Seller: {listing.seller.slice(0, 10)}...</div>
+                      <div style={{ fontSize: 12, fontWeight: 500 }}>
+                        List Price: <span style={{ fontFamily: 'var(--ff-mono)', color: 'var(--ff-primary)' }}>{formatUnits(listing.price, 6)} USDC</span>
+                      </div>
+                    </div>
+                    <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={() => handleBuyListing(listing.tokenId, listing.price, USDC_ADDRESS_ARC)}>
+                      Instant Buy
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: '40px 16px', border: '1px dashed var(--ff-border)', borderRadius: 8, textAlign: 'center', color: 'var(--ff-text-muted)', fontSize: 12 }}>
+                No active secondary invoice listings found.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>
