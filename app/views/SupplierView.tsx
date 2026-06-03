@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useWriteContract, useWaitForTransactionReceipt, useSignMessage } from 'wagmi'
 import { parseUnits } from 'viem'
-import { Send, ExternalLink, Zap, UploadCloud, BrainCircuit, CheckCircle2, FileText, CheckCircle, Clock, ShieldAlert, BadgeInfo } from 'lucide-react'
+import { Send, ExternalLink, Zap, UploadCloud, BrainCircuit, CheckCircle2, FileText, CheckCircle, Clock, ShieldAlert, BadgeInfo, Wallet, PlusCircle, Database, Check } from 'lucide-react'
 import { toast } from 'sonner'
-import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi } from '@/lib/contracts'
+import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi, USDC_ADDRESS_ARC, usdcAbi } from '@/lib/contracts'
 import { getExplorerTxLink } from '@/lib/utils'
 import { getSmartAccountAddress } from '@/lib/smart-account'
 import { useUnifiedAccount } from '@/lib/web3-provider'
@@ -47,6 +47,14 @@ export default function SupplierView() {
   const [paymasterActive, setPaymasterActive] = useState(false)
   const [paymasterLogs, setPaymasterLogs] = useState<string[]>([])
 
+  // Gateway Nanopayments states
+  const { signMessageAsync } = useSignMessage()
+  const [gatewayBalance, setGatewayBalance] = useState<number | null>(null)
+  const [depositAmount, setDepositAmount] = useState('0.05')
+  const [depositing, setDepositing] = useState(false)
+  const [transactions, setTransactions] = useState<any[]>([])
+  const [loadingLedger, setLoadingLedger] = useState(false)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { writeContract, data: txHash, isPending } = useWriteContract()
@@ -54,59 +62,173 @@ export default function SupplierView() {
 
   const tokenConfig = SUPPORTED_TOKENS[selectedToken]
 
-  // 1. PDF File Upload Handler
+  // Fetch Gateway nanopayments info
+  const fetchGatewayData = async () => {
+    if (!address) return
+    setLoadingLedger(true)
+    try {
+      const res = await fetch(`/api/underwrite/gateway/deposit?address=${address}`)
+      if (res.ok) {
+        const data = await res.json()
+        setGatewayBalance(data.balance)
+        setTransactions(data.transactions)
+      }
+    } catch (err) {
+      console.error('Error fetching gateway data:', err)
+    } finally {
+      setLoadingLedger(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchGatewayData()
+  }, [address])
+
+  // Process nanopayments deposit to backend
+  const handleDeposit = async () => {
+    if (!address) return toast.error('Connect wallet first')
+    const parsedAmount = parseFloat(depositAmount)
+    if (isNaN(parsedAmount) || parsedAmount <= 0) return toast.error('Invalid deposit amount')
+
+    setDepositing(true)
+    const toastId = toast.loading('Initiating USDC deposit transaction...')
+    try {
+      writeContract({
+        address: USDC_ADDRESS_ARC,
+        abi: usdcAbi,
+        functionName: 'transfer',
+        args: [FACTORFI_CONTRACT_ADDRESS, parseUnits(depositAmount, 6)]
+      }, {
+        onSuccess: async (hash) => {
+          toast.loading('Confirming transaction on-chain...', { id: toastId })
+          await new Promise(r => setTimeout(r, 2500))
+
+          const response = await fetch('/api/underwrite/gateway/deposit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              address,
+              amount: parsedAmount,
+              txHash: hash
+            })
+          })
+
+          if (response.ok) {
+            toast.success(`Deposited ${depositAmount} USDC successfully!`, { id: toastId })
+            fetchGatewayData()
+          } else {
+            toast.error('Failed to register deposit on backend', { id: toastId })
+          }
+          setDepositing(false)
+        },
+        onError: (err) => {
+          toast.error(`Deposit rejected: ${err.message.slice(0, 60)}`, { id: toastId })
+          setDepositing(false)
+        }
+      })
+    } catch (err: any) {
+      toast.error(`Error: ${err.message}`, { id: toastId })
+      setDepositing(false)
+    }
+  }
+
+  // 1. PDF File Upload Handler with x402 Handshake
   const handlePdfUpload = async (file: File) => {
     if (!file) return
+    if (!address) {
+      toast.error('Please connect your wallet first')
+      return
+    }
     
     setAgentRunning(true)
     setAgentComplete(false)
     setAgentLogs([
-      { step: 1, message: `Uploading ${file.name} to AI Underwriting Engine...`, status: 'running' },
-      { step: 2, message: 'OCR Engine: Parsing layout structures and text...', status: 'pending' },
-      { step: 3, message: 'Oracle Node: Checking debtor credit ratings on Arc...', status: 'pending' },
-      { step: 4, message: 'Crypto Shield: Generating anti-double factoring signature...', status: 'pending' }
+      { step: 1, message: 'Checking Gateway Nanopayment Balance...', status: 'running' },
+      { step: 2, message: 'Negotiating x402 payment handshake...', status: 'pending' },
+      { step: 3, message: 'Signing nanopayment proof for OCR analysis...', status: 'pending' },
+      { step: 4, message: 'Uploading file with x402 proof to AI Underwriting engine...', status: 'pending' },
+      { step: 5, message: 'Oracle Node: Checking debtor credit ratings on Arc...', status: 'pending' },
+      { step: 6, message: 'Crypto Shield: Generating anti-double factoring signature...', status: 'pending' }
     ])
 
     try {
+      // Step 1: Check balance
+      await new Promise(r => setTimeout(r, 600))
+      const balanceRes = await fetch(`/api/underwrite/gateway/deposit?address=${address}`)
+      if (!balanceRes.ok) throw new Error('Failed to verify balance')
+      const balanceData = await balanceRes.json()
+      
+      if (balanceData.balance < 0.0001) {
+        setAgentLogs(prev => prev.map(l => l.step === 1 ? { ...l, status: 'pending', message: '❌ Insufficient Gateway balance. Please deposit USDC.' } : l))
+        throw new Error('Insufficient Gateway balance. Min $0.0001 USDC required.')
+      }
+
+      setAgentLogs(prev => prev.map(l => l.step === 1 ? { ...l, status: 'done' } : l.step === 2 ? { ...l, status: 'running' } : l))
+
+      // Step 2: Handshake & signature generation
+      await new Promise(r => setTimeout(r, 600))
+      setAgentLogs(prev => prev.map(l => l.step === 2 ? { ...l, status: 'done' } : l.step === 3 ? { ...l, status: 'running' } : l))
+
+      const timestamp = Date.now()
+      const nonce = Math.floor(Math.random() * 1000000).toString()
+      const amountVal = '0.0001'
+      const message = `Circle Nanopayment: ${address.toLowerCase()} pays ${amountVal} USDC. Nonce: ${nonce}. Timestamp: ${timestamp}`
+      
+      const signature = await signMessageAsync({ message })
+      
+      const proof = {
+        signature,
+        timestamp,
+        nonce,
+        address,
+        amount: amountVal
+      }
+      const proofHeader = JSON.stringify(proof)
+
+      setAgentLogs(prev => prev.map(l => l.step === 3 ? { ...l, status: 'done' } : l.step === 4 ? { ...l, status: 'running' } : l))
+
+      // Step 3: Post file to OCR route with X-Nanopayment headers
       const formData = new FormData()
       formData.append('file', file)
       formData.append('token', tokenConfig.address)
 
-      // Step 1 done
-      await new Promise(r => setTimeout(r, 1000))
-      setAgentLogs(prev => prev.map(l => l.step === 1 ? { ...l, status: 'done' } : l.step === 2 ? { ...l, status: 'running' } : l))
-
       const res = await fetch('/api/underwrite/ocr', {
         method: 'POST',
+        headers: {
+          'X-Nanopayment-Proof': proofHeader,
+          'X-Nanopayment-Address': address
+        },
         body: formData
       })
 
-      // Step 2 & 3 done
-      await new Promise(r => setTimeout(r, 1200))
-      setAgentLogs(prev => prev.map(l => l.step === 2 ? { ...l, status: 'done' } : l.step === 3 ? { ...l, status: 'running' } : l))
-
       if (!res.ok) {
-        throw new Error('OCR Parsing failed')
+        const errorData = await res.json()
+        throw new Error(errorData.error || errorData.details || 'OCR Parsing failed')
       }
 
       const data = await res.json()
 
-      await new Promise(r => setTimeout(r, 1000))
-      setAgentLogs(prev => prev.map(l => l.step === 3 ? { ...l, status: 'done' } : l.step === 4 ? { ...l, status: 'running' } : l))
+      // Update state balance
+      if (data.newBalance !== undefined) {
+        setGatewayBalance(data.newBalance)
+      }
 
+      setAgentLogs(prev => prev.map(l => l.step === 4 ? { ...l, status: 'done' } : l.step === 5 ? { ...l, status: 'running' } : l))
       await new Promise(r => setTimeout(r, 800))
-      setAgentLogs(prev => prev.map(l => l.step === 4 ? { ...l, status: 'done' } : l))
+      
+      setAgentLogs(prev => prev.map(l => l.step === 5 ? { ...l, status: 'done' } : l.step === 6 ? { ...l, status: 'running' } : l))
+      await new Promise(r => setTimeout(r, 600))
+
+      setAgentLogs(prev => prev.map(l => l.step === 6 ? { ...l, status: 'done' } : l))
 
       // Update state with parsed values
       setAnchorAddr(data.details.anchor)
       setAmount(data.details.amount)
       
-      // format date to yyyy-MM-dd
       const dateStr = new Date(data.details.dueDate * 1000).toISOString().split('T')[0]
       setDueDate(dateStr)
       setDescription(data.details.description)
       
-      // cryptographic credentials
       setInvoiceHash(data.invoiceHash)
       setUnderwriterSignature(data.signature)
       setConfidence(data.confidence)
@@ -115,8 +237,9 @@ export default function SupplierView() {
 
       setAgentRunning(false)
       setAgentComplete(true)
-      toast.success('Invoice OCR analysis finished successfully!')
-
+      toast.success('Invoice OCR analysis finished successfully! Fee: $0.0001 USDC')
+      
+      fetchGatewayData() // reload transaction history
     } catch (err: any) {
       console.error(err)
       setAgentRunning(false)
@@ -479,6 +602,130 @@ export default function SupplierView() {
             <div style={{ fontSize: 12, color: 'var(--ff-text-muted)', lineHeight: 1.5 }}>
               Verification checks require signatures from registered AI underwriter agents. Submissions lacking valid signatures will fail.
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Gateway Nanopayments Dashboard */}
+      <div className="grid-2" style={{ marginTop: 24, gap: 20 }}>
+        {/* Deposit Portal & Balance Widget */}
+        <div className="card" style={{ border: '1px solid var(--ff-border)' }}>
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Wallet size={18} color="var(--ff-primary)" /> Circle Gateway Nanopayments
+            </span>
+            <span className={`badge ${gatewayBalance !== null && gatewayBalance > 0 ? 'badge-approved' : 'badge-default'}`}>
+              {gatewayBalance !== null && gatewayBalance > 0 ? 'Active' : 'No Balance'}
+            </span>
+          </div>
+
+          <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid var(--ff-border)', marginTop: 12 }}>
+            <span style={{ fontSize: 11, color: 'var(--ff-text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
+              Available Gateway balance
+            </span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '8px 0' }}>
+              <span style={{ fontSize: 32, fontWeight: 800, color: '#fff', fontFamily: 'var(--ff-mono)' }}>
+                ${gatewayBalance !== null ? gatewayBalance.toFixed(4) : '0.0000'}
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ff-primary)' }}>USDC</span>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--ff-text-muted)', margin: 0 }}>
+              Charge Rate: <strong>$0.0001 USDC</strong> per invoice OCR page scan. Settle gas-free.
+            </p>
+          </div>
+
+          <div style={{ marginTop: 20 }}>
+            <label className="form-label" style={{ fontSize: 12, fontWeight: 600 }}>Deposit USDC to Gateway Channel</label>
+            <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  placeholder="0.05"
+                  step="0.01"
+                  style={{ paddingRight: 50 }}
+                  disabled={depositing || !address}
+                />
+                <span style={{ position: 'absolute', right: 12, top: 10, fontSize: 12, fontWeight: 600, color: 'var(--ff-text-muted)' }}>
+                  USDC
+                </span>
+              </div>
+              <button
+                className="btn btn-primary"
+                onClick={handleDeposit}
+                disabled={depositing || !address || !depositAmount}
+                style={{ display: 'flex', gap: 6, alignItems: 'center' }}
+              >
+                <PlusCircle size={16} />
+                {depositing ? 'Depositing...' : 'Deposit'}
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--ff-text-muted)', marginTop: 6, marginInline: 2 }}>
+              Requires standard USDC ERC-20 approval and wallet signature transfer.
+            </p>
+          </div>
+        </div>
+
+        {/* Dynamic Billing Ledger */}
+        <div className="card" style={{ border: '1px solid var(--ff-border)' }}>
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Database size={18} color="var(--ff-success)" /> Microtransaction Ledger
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--ff-text-muted)', fontWeight: 600 }}>
+              Volume: {transactions.filter(t => t.type === 'spend').length} scans
+            </span>
+          </div>
+
+          <div style={{ marginTop: 12, maxHeight: 220, overflowY: 'auto' }}>
+            {loadingLedger ? (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--ff-text-muted)', fontSize: 13 }}>
+                Loading ledger records...
+              </div>
+            ) : transactions.length > 0 ? (
+              <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--ff-border)', color: 'var(--ff-text-muted)', textAlign: 'left' }}>
+                    <th style={{ padding: '6px 4px', fontWeight: 600 }}>Time</th>
+                    <th style={{ padding: '6px 4px', fontWeight: 600 }}>Activity</th>
+                    <th style={{ padding: '6px 4px', fontWeight: 600 }}>Amount</th>
+                    <th style={{ padding: '6px 4px', fontWeight: 600, textAlign: 'right' }}>Receipt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.slice().reverse().map((t, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                      <td style={{ padding: '8px 4px', color: 'var(--ff-text-muted)', fontFamily: 'var(--ff-mono)', fontSize: 10 }}>
+                        {new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </td>
+                      <td style={{ padding: '8px 4px', fontWeight: 500 }}>
+                        {t.type === 'deposit' ? 'Gateway Deposit' : 'OCR AI Page Scan'}
+                      </td>
+                      <td style={{ padding: '8px 4px', fontFamily: 'var(--ff-mono)', fontWeight: 600, color: t.type === 'deposit' ? 'var(--ff-success)' : 'var(--ff-primary)' }}>
+                        {t.type === 'deposit' ? '+' : '-'}${t.amount.toFixed(4)}
+                      </td>
+                      <td style={{ padding: '8px 4px', textAlign: 'right' }}>
+                        {t.txHash ? (
+                          <a href={getExplorerTxLink(t.txHash)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--ff-primary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            Explorer <ExternalLink size={10} />
+                          </a>
+                        ) : (
+                          <span style={{ color: 'var(--ff-text-muted)', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                            <Check size={10} /> Signed
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--ff-text-muted)', fontSize: 12 }}>
+                No microtransaction history found.<br />Depositing USDC and scanning invoices will populate records.
+              </div>
+            )}
           </div>
         </div>
       </div>
