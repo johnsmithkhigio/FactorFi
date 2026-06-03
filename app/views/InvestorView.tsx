@@ -3,11 +3,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits, formatUnits } from 'viem'
-import { TrendingUp, ExternalLink, DollarSign, Settings, Play, CheckCircle, Activity, ShieldCheck, Cpu } from 'lucide-react'
+import { TrendingUp, ExternalLink, DollarSign, Settings, Play, CheckCircle, Activity, ShieldCheck, Cpu, ArrowRightLeft, Database } from 'lucide-react'
 import { toast } from 'sonner'
-import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi, USDC_ADDRESS_ARC, usdcAbi, USDC_DECIMALS } from '@/lib/contracts'
-import { getExplorerTxLink, formatUSDC, STATUS_LABELS, calculateYield, formatDate } from '@/lib/utils'
+import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi, USDC_ADDRESS_ARC, usdcAbi, USDC_DECIMALS, AUTO_FACTOR_VAULT_ADDRESS, autoFactorVaultAbi } from '@/lib/contracts'
+import { getExplorerTxLink, formatUSDC, STATUS_LABELS, formatDate } from '@/lib/utils'
 import { useUnifiedAccount } from '@/lib/web3-provider'
+import { formatTokenAmount, getTokenByAddress } from '@/lib/token-registry'
 
 export default function InvestorView() {
   const { address } = useUnifiedAccount()
@@ -15,16 +16,25 @@ export default function InvestorView() {
   const [lookupId, setLookupId] = useState('')
   const [discountBps, setDiscountBps] = useState('300') // 3% default
   
-  // Vault state
-  const [vaultAmount, setVaultAmount] = useState('10000')
-  const [minDiscount, setMinDiscount] = useState('2.5')
-  const [minScore, setMinScore] = useState('900')
-  const [vaultActive, setVaultActive] = useState(false)
+  // Vault state controls
+  const [vaultDepositInput, setVaultDepositInput] = useState('100')
+  const [vaultWithdrawInput, setVaultWithdrawInput] = useState('100')
+  
+  // Matching rules forms
+  const [minDiscountForm, setMinDiscountForm] = useState('2.5')
+  const [minScoreForm, setMinScoreForm] = useState('900')
+  
+  // Scanning log triggers
+  const [vaultActive, setVaultActive] = useState(true)
   const [scanLogs, setScanLogs] = useState<{time: string, msg: string, type: 'info'|'success'|'warn'}[]>([])
 
-  const { writeContract: approveUSDC, isPending: approvePending } = useWriteContract()
+  // Contract write triggers
+  const { writeContract: approveToken, isPending: approvePending } = useWriteContract()
   const { writeContract: fundInvoice, data: fundHash, isPending: fundPending } = useWriteContract()
-  const { isLoading: fundConfirming, isSuccess: fundSuccess } = useWaitForTransactionReceipt({ hash: fundHash })
+  const { isLoading: fundConfirming } = useWaitForTransactionReceipt({ hash: fundHash })
+
+  // Vault write triggers
+  const { writeContract: writeVault, isPending: vaultPending } = useWriteContract()
 
   // Log auto-scroll
   const logEndRef = useRef<HTMLDivElement>(null)
@@ -32,8 +42,41 @@ export default function InvestorView() {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [scanLogs])
 
-  // Lookup invoice
-  const { data: invoiceData, refetch } = useReadContract({
+  // --- Real-time On-Chain Vault Queries ---
+  const { data: tvlData, refetch: refetchTvl } = useReadContract({
+    address: AUTO_FACTOR_VAULT_ADDRESS,
+    abi: autoFactorVaultAbi,
+    functionName: 'totalAssets',
+  })
+
+  const { data: activeAllocData, refetch: refetchAlloc } = useReadContract({
+    address: AUTO_FACTOR_VAULT_ADDRESS,
+    abi: autoFactorVaultAbi,
+    functionName: 'activeAllocations',
+  })
+
+  const { data: userSharesData, refetch: refetchShares } = useReadContract({
+    address: AUTO_FACTOR_VAULT_ADDRESS,
+    abi: autoFactorVaultAbi,
+    functionName: 'balanceOf',
+    args: address ? [address as `0x${string}`] : undefined,
+    query: { enabled: !!address },
+  })
+
+  const { data: minDiscountBpsData } = useReadContract({
+    address: AUTO_FACTOR_VAULT_ADDRESS,
+    abi: autoFactorVaultAbi,
+    functionName: 'minDiscountBps',
+  })
+
+  const { data: minCreditScoreData } = useReadContract({
+    address: AUTO_FACTOR_VAULT_ADDRESS,
+    abi: autoFactorVaultAbi,
+    functionName: 'minCreditScore',
+  })
+
+  // Lookup invoice details
+  const { data: invoiceData, refetch: refetchInvoice } = useReadContract({
     address: FACTORFI_CONTRACT_ADDRESS,
     abi: factorFiAbi,
     functionName: 'getInvoice',
@@ -41,9 +84,22 @@ export default function InvestorView() {
     query: { enabled: !!lookupId },
   })
 
+  const { data: protocolStatsData } = useReadContract({
+    address: FACTORFI_CONTRACT_ADDRESS,
+    abi: factorFiAbi,
+    functionName: 'getProtocolStats',
+  })
+  const protocolFeeBps = protocolStatsData ? Number((protocolStatsData as any)[3]) : 50;
+
   const inv = invoiceData as any
 
-  // Background Keeper Scanning Simulation
+  const refetchAllVaultState = () => {
+    refetchTvl()
+    refetchAlloc()
+    refetchShares()
+  }
+
+  // Auto-scroll scan simulation logger
   useEffect(() => {
     if (!vaultActive) return
     
@@ -52,68 +108,49 @@ export default function InvestorView() {
       setScanLogs(prev => [...prev, { time, msg, type }])
     }
 
-    addLog('Smart Vault deployed. Operational status: ACTIVE', 'success')
-    addLog(`Matching rules: discount >= ${minDiscount}% & Anchor Rating >= ${minScore}`, 'info')
+    addLog('Yield Vault Keeper Daemon active.', 'success')
+    addLog(`On-chain rules: Min Discount = ${minDiscountBpsData ? Number(minDiscountBpsData) / 100 : 2.5}% | Min Score = ${minCreditScoreData ? Number(minCreditScoreData) : 900}`, 'info')
 
-    let block = 1928392
+    let block = 1209384
     const interval = setInterval(() => {
       block += 1
-      addLog(`Scanning block #${block} on Arc Testnet...`, 'info')
+      addLog(`Scanning Block #${block} on Arc Testnet for approved invoice files...`, 'info')
       
-      // Randomly inject warnings or match checks
-      if (Math.random() > 0.75) {
-        addLog(`No matching invoices in block #${block}`, 'info')
+      if (Math.random() > 0.8) {
+        addLog(`Found Invoice ID #12 (Acme Corp supplier invoice). Checking criteria...`, 'warn')
+        addLog(`Match verified: 3.0% >= ${(Number(minDiscountBpsData || 250) / 100).toFixed(1)}% & Rating 920 >= ${Number(minCreditScoreData || 900)}. Passing.`, 'success')
       }
-    }, 4000)
+    }, 5000)
 
     return () => clearInterval(interval)
-  }, [vaultActive, minDiscount, minScore])
+  }, [vaultActive, minDiscountBpsData, minCreditScoreData])
 
-  const triggerInflowMatch = () => {
-    if (!vaultActive) {
-      return toast.error('Deploy the Smart Vault first!')
-    }
-    
-    const addLog = (msg: string, type: 'info'|'success'|'warn' = 'info') => {
-      const time = new Date().toLocaleTimeString()
-      setScanLogs(prev => [...prev, { time, msg, type }])
-    }
-
-    addLog('MATCH DETECTED: Invoice #12 (Tesla Inc. components)', 'warn')
-    addLog('Verifying matched criteria...', 'info')
-    
-    setTimeout(() => {
-      addLog('Criteria verified! Discount: 3.2% >= 2.5% | Anchor Rating: 940 >= 900. PASS', 'success')
-      addLog('Sponsoring transaction from Institutional Vault Set...', 'info')
-    }, 1200)
-
-    setTimeout(() => {
-      addLog('Calling fundInvoice(12) with 3.2% discount...', 'info')
-    }, 2400)
-
-    setTimeout(() => {
-      addLog('Auto-Funding Complete! Settle Tx: 0x9a8f...b23d', 'success')
-      toast.success('Smart Vault funded invoice #12 automatically!')
-    }, 3600)
-  }
-
+  // Direct Invoice Sponsoring (Manual Flow)
   const handleFund = () => {
     if (!invoiceId || !discountBps) return toast.error('Enter invoice ID and discount')
     if (!inv || inv.status !== 1) return toast.error('Invoice must be in Approved status')
 
     const fundAmount = inv.amount - (inv.amount * BigInt(discountBps) / BigInt(10000))
+    const tokenSymbol = getTokenByAddress(inv.token)?.symbol || 'USDC'
 
-    approveUSDC({
-      address: USDC_ADDRESS_ARC, abi: usdcAbi, functionName: 'approve',
+    approveToken({
+      address: inv.token as `0x${string}`, 
+      abi: usdcAbi, 
+      functionName: 'approve',
       args: [FACTORFI_CONTRACT_ADDRESS, fundAmount],
     }, {
       onSuccess: () => {
-        toast.info('USDC approved, funding invoice...')
+        toast.info(`${tokenSymbol} approved, funding invoice...`)
         fundInvoice({
-          address: FACTORFI_CONTRACT_ADDRESS, abi: factorFiAbi, functionName: 'fundInvoice',
+          address: FACTORFI_CONTRACT_ADDRESS, 
+          abi: factorFiAbi, 
+          functionName: 'fundInvoice',
           args: [BigInt(invoiceId), BigInt(discountBps)],
         }, {
-          onSuccess: (h) => toast.success('Invoice funded!', { action: { label: 'View', onClick: () => window.open(getExplorerTxLink(h), '_blank') } }),
+          onSuccess: (h) => {
+            toast.success(`Invoice funded! Asset: ${tokenSymbol}`, { action: { label: 'View', onClick: () => window.open(getExplorerTxLink(h), '_blank') } })
+            refetchInvoice()
+          },
           onError: (e) => toast.error('Funding failed', { description: e.message.slice(0, 80) }),
         })
       },
@@ -121,28 +158,151 @@ export default function InvestorView() {
     })
   }
 
-  const toggleVault = () => {
-    if (vaultActive) {
-      setVaultActive(false)
-      setScanLogs([])
-      toast.info('Smart Yield Vault deactivated.')
-    } else {
-      setVaultActive(true)
-      toast.success('Smart Yield Vault deployed to Arc successfully!')
-    }
+  // Vault Actions: Deposits
+  const handleVaultDeposit = () => {
+    if (!vaultDepositInput || Number(vaultDepositInput) <= 0) return toast.error('Enter a valid deposit amount')
+    const depositAmt = parseUnits(vaultDepositInput, USDC_DECIMALS)
+
+    approveToken({
+      address: USDC_ADDRESS_ARC, abi: usdcAbi, functionName: 'approve',
+      args: [AUTO_FACTOR_VAULT_ADDRESS, depositAmt]
+    }, {
+      onSuccess: () => {
+        toast.info('USDC allowance approved! Depositing into Yield Vault...')
+        writeVault({
+          address: AUTO_FACTOR_VAULT_ADDRESS,
+          abi: autoFactorVaultAbi,
+          functionName: 'deposit',
+          args: [depositAmt, address as `0x${string}`]
+        }, {
+          onSuccess: () => {
+            toast.success('Deposited successfully into AutoFactorVault!')
+            setVaultDepositInput('')
+            refetchAllVaultState()
+          },
+          onError: (e) => toast.error('Deposit failed', { description: e.message.slice(0, 85) })
+        })
+      },
+      onError: (e) => toast.error('Approval failed', { description: e.message.slice(0, 80) })
+    })
+  }
+
+  // Vault Actions: Withdrawals
+  const handleVaultWithdraw = () => {
+    if (!vaultWithdrawInput || Number(vaultWithdrawInput) <= 0) return toast.error('Enter a valid withdraw amount')
+    const withdrawAmt = parseUnits(vaultWithdrawInput, USDC_DECIMALS)
+
+    writeVault({
+      address: AUTO_FACTOR_VAULT_ADDRESS,
+      abi: autoFactorVaultAbi,
+      functionName: 'withdraw',
+      args: [withdrawAmt, address as `0x${string}`, address as `0x${string}`]
+    }, {
+      onSuccess: () => {
+        toast.success('Withdrew successfully from Yield Vault!')
+        setVaultWithdrawInput('')
+        refetchAllVaultState()
+      },
+      onError: (e) => toast.error('Withdrawal failed', { description: e.message.slice(0, 85) })
+    })
   }
 
   return (
     <>
       <div className="grid-2" style={{ marginBottom: 24 }}>
-        {/* Manual Funding */}
+        {/* Programmable Yield Vault (Auto-Factor Vault UI) */}
         <div className="card">
-          <div className="card-header"><span className="card-title">Manual Funding (Standard)</span></div>
+          <div className="card-header">
+            <span className="card-title">Programmable Yield Vault</span>
+            <span className="badge badge-approved" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <TrendingUp size={12} /> Auto-Yield Mode
+            </span>
+          </div>
+
+          <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'var(--ff-text-muted)' }}>
+            Deposit USDC stablecoins into the auto-factor vault to automatically finance prime receivables matching your yield guidelines.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <div style={{ padding: 12, background: 'var(--ff-bg)', borderRadius: 8, border: '1px solid var(--ff-border)' }}>
+              <div style={{ fontSize: 11, color: 'var(--ff-text-muted)' }}>Total Value Locked (USDC)</div>
+              <div style={{ fontSize: 20, fontWeight: 700 }}>
+                ${tvlData ? formatUSDC(tvlData as bigint) : '0.00'}
+              </div>
+            </div>
+            <div style={{ padding: 12, background: 'var(--ff-bg)', borderRadius: 8, border: '1px solid var(--ff-border)' }}>
+              <div style={{ fontSize: 11, color: 'var(--ff-text-muted)' }}>Active Allocations</div>
+              <div style={{ fontSize: 20, fontWeight: 700 }}>
+                ${activeAllocData ? formatUSDC(activeAllocData as bigint) : '0.00'}
+              </div>
+            </div>
+          </div>
+
+          {address && (
+            <div style={{ padding: 12, background: 'rgba(255,255,255,0.01)', borderRadius: 8, border: '1px solid var(--ff-border)', marginBottom: 16, fontSize: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ color: 'var(--ff-text-secondary)' }}>Your Pool Shares:</span>
+                <span style={{ fontWeight: 600 }}>{userSharesData ? formatUSDC(userSharesData as bigint) : '0.00'} ffUSDC</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--ff-text-secondary)' }}>Yield Value Claim:</span>
+                <span style={{ fontWeight: 600 }}>
+                  ${userSharesData ? formatUSDC(userSharesData as bigint) : '0.00'} USDC
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label" style={{ fontSize: 11 }}>Deposit USDC</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input className="form-input" type="number" placeholder="100" value={vaultDepositInput} onChange={e => setVaultDepositInput(e.target.value)} />
+                <button className="btn btn-primary" onClick={handleVaultDeposit} disabled={vaultPending || approvePending}>Deposit</button>
+              </div>
+            </div>
+
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label" style={{ fontSize: 11 }}>Withdraw USDC</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input className="form-input" type="number" placeholder="100" value={vaultWithdrawInput} onChange={e => setVaultWithdrawInput(e.target.value)} />
+                <button className="btn btn-secondary" onClick={handleVaultWithdraw} disabled={vaultPending}>Withdraw</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Live Keeper Output */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="card-header" style={{ marginBottom: 12 }}>
+            <span className="card-title">Keeper Daemon Output Monitor</span>
+            <span className="badge badge-approved">Active Scanner</span>
+          </div>
+
+          <div style={{
+            flex: 1, maxHeight: 290, overflowY: 'auto', background: '#000', border: '1px solid #222', borderRadius: 8,
+            padding: 12, fontFamily: 'var(--ff-mono)', fontSize: 11, color: '#ccc', display: 'flex', flexDirection: 'column', gap: 6
+          }}>
+            {scanLogs.map((log, idx) => (
+              <div key={idx} style={{ display: 'flex', gap: 8, color: log.type === 'success' ? 'var(--ff-success)' : log.type === 'warn' ? 'var(--ff-primary)' : '#888' }}>
+                <span style={{ color: '#555' }}>[{log.time}]</span>
+                <span>{log.msg}</span>
+              </div>
+            ))}
+            <div ref={logEndRef} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid-2" style={{ marginBottom: 0 }}>
+        {/* Manual Sponsoring */}
+        <div className="card">
+          <div className="card-header"><span className="card-title">Direct Invoice Sponsoring (Manual Flow)</span></div>
           <div className="form-group">
             <label className="form-label">Invoice ID</label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input className="form-input" type="number" placeholder="0" value={lookupId} onChange={e => { setLookupId(e.target.value); setInvoiceId(e.target.value) }} />
-              <button className="btn btn-secondary" onClick={() => refetch()}>Lookup</button>
+              <button className="btn btn-secondary" onClick={() => refetchInvoice()}>Lookup</button>
             </div>
           </div>
 
@@ -153,7 +313,7 @@ export default function InvestorView() {
                   <tbody>
                     {[
                       ['Status', STATUS_LABELS[Number(inv.status)] || 'Unknown'],
-                      ['Amount', `$${formatUSDC(inv.amount)} USDC`],
+                      ['Amount', formatTokenAmount(inv.amount, inv.token)],
                       ['Anchor', `${String(inv.anchor).slice(0, 10)}...`],
                       ['Due Date', inv.dueDate > 0 ? formatDate(Number(inv.dueDate)) : 'N/A'],
                     ].map(([label, value]) => (
@@ -176,11 +336,25 @@ export default function InvestorView() {
               </div>
 
               {Number(discountBps) > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '12px 14px', background: 'var(--ff-bg)', borderRadius: 8, border: '1px solid var(--ff-border)' }}>
-                  <span>Gross profit:</span>
-                  <span style={{ fontWeight: 700, color: 'var(--ff-success)', fontFamily: 'var(--ff-mono)' }}>
-                    + ${formatUSDC(inv.amount * BigInt(discountBps) / BigInt(10000))} USDC
-                  </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '12px 14px', background: 'var(--ff-bg)', borderRadius: 8, border: '1px solid var(--ff-border)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                    <span style={{ color: 'var(--ff-text-secondary)' }}>Gross Yield Profit:</span>
+                    <span style={{ fontWeight: 600, color: 'var(--ff-success)', fontFamily: 'var(--ff-mono)' }}>
+                      + {formatTokenAmount(inv.amount * BigInt(discountBps) / BigInt(10000), inv.token)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                    <span style={{ color: 'var(--ff-text-secondary)' }}>Protocol Fee ({(protocolFeeBps / 100).toFixed(1)}%):</span>
+                    <span style={{ fontWeight: 600, color: 'var(--ff-danger)', fontFamily: 'var(--ff-mono)' }}>
+                      - {formatTokenAmount(inv.amount * BigInt(protocolFeeBps) / BigInt(10000), inv.token)}
+                    </span>
+                  </div>
+                  <div style={{ borderTop: '1px solid var(--ff-border)', marginTop: 4, paddingTop: 4, display: 'flex', justifyContent: 'space-between', fontSize: 13, fontWeight: 700 }}>
+                    <span>Estimated Net Profit:</span>
+                    <span style={{ color: 'var(--ff-primary)', fontFamily: 'var(--ff-mono)' }}>
+                      {formatTokenAmount((inv.amount * BigInt(discountBps) / BigInt(10000)) - (inv.amount * BigInt(protocolFeeBps) / BigInt(10000)), inv.token)}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -195,104 +369,26 @@ export default function InvestorView() {
           )}
         </div>
 
-        {/* Auto-Factor Vault */}
-        <div className="card" style={{ background: '#0a0a0a', color: '#fff', borderColor: vaultActive ? 'var(--ff-primary)' : '#333', transition: 'all 0.3s' }}>
-          <div className="card-header" style={{ marginBottom: 16, borderBottom: '1px solid #333', paddingBottom: 16 }}>
-            <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#fff' }}>
-              <Cpu size={18} color="var(--ff-primary)" />
-              Programmable Yield Vault
-              {vaultActive && <span className="pulse" style={{ width: 8, height: 8, background: 'var(--ff-success)', borderRadius: '50%' }} />}
-            </span>
-            <span style={{ fontSize: 11, background: '#222', padding: '2px 8px', borderRadius: 12 }}>Agentic Execution</span>
-          </div>
-          
-          <div style={{ fontSize: 13, color: '#888', marginBottom: 24, lineHeight: 1.6 }}>
-            Institutional capital doesn't click buttons. Deposit USDC into the vault and define your risk parameters. The AI Keeper will automatically factor matching invoices on-chain.
+        {/* Dynamic Risk Guidelines configuration settings */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="card-header"><span className="card-title">Keeper Daemon Guidelines & Controls</span></div>
+          <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'var(--ff-text-muted)' }}>
+            Configure risk thresholds for the autonomous keeper nodes matching trade invoice inventory.
+          </p>
+
+          <div className="form-group">
+            <label className="form-label">Minimum Discount margin (%)</label>
+            <input className="form-input" type="number" step="0.1" value={minDiscountForm} onChange={e => setMinDiscountForm(e.target.value)} />
           </div>
 
           <div className="form-group">
-            <label className="form-label" style={{ color: '#ccc' }}>Vault Deposit Amount (USDC)</label>
-            <div style={{ position: 'relative' }}>
-              <input 
-                className="form-input form-input-mono" 
-                type="number" 
-                value={vaultAmount} 
-                onChange={e => setVaultAmount(e.target.value)}
-                disabled={vaultActive}
-                style={{ paddingLeft: 32, background: '#111', borderColor: '#333', color: '#fff' }}
-              />
-              <span style={{ position: 'absolute', left: 12, top: 11, color: '#888' }}>$</span>
-            </div>
+            <label className="form-label">Minimum Debtor Credit Score (0-1000)</label>
+            <input className="form-input" type="number" value={minScoreForm} onChange={e => setMinScoreForm(e.target.value)} />
           </div>
 
-          <div className="grid-2">
-            <div className="form-group">
-              <label className="form-label" style={{ color: '#ccc' }}>Min. Discount (%)</label>
-              <input className="form-input form-input-mono" type="number" step="0.1" value={minDiscount} onChange={e => setMinDiscount(e.target.value)} disabled={vaultActive} style={{ background: '#111', borderColor: '#333', color: '#fff' }} />
-            </div>
-            <div className="form-group">
-              <label className="form-label" style={{ color: '#ccc' }}>Min. Anchor Risk Score</label>
-              <input className="form-input form-input-mono" type="text" value={minScore} onChange={e => setMinScore(e.target.value)} disabled={vaultActive} placeholder="e.g. 900" style={{ background: '#111', borderColor: '#333', color: '#fff' }} />
-            </div>
-          </div>
-
-          <div style={{ padding: 14, background: '#111', borderRadius: 8, border: '1px solid #222', marginBottom: 20 }}>
-            <div style={{ fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Smart Rule Engine</div>
-            <div style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--ff-primary)' }}>
-              if (invoice.discount &gt;= {minDiscount}% && anchor.score &gt;= {minScore}) {'{'}
-              <br />&nbsp;&nbsp;autoFund(invoice.id);
-              <br />{'}'}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <button className="btn btn-primary" style={{ width: '100%', background: vaultActive ? 'var(--ff-danger)' : '#fff', color: vaultActive ? '#fff' : '#000', borderColor: vaultActive ? 'var(--ff-danger)' : '#fff' }} onClick={toggleVault}>
-              <Settings size={16} /> {vaultActive ? 'Deactivate Smart Vault' : 'Deploy Smart Vault'}
-            </button>
-            
-            {vaultActive && (
-              <button className="btn btn-secondary" style={{ width: '100%' }} onClick={triggerInflowMatch}>
-                <Play size={16} /> Simulate Inflow Invoice Match
-              </button>
-            )}
-          </div>
-
-          {vaultActive && scanLogs.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 11, color: '#aaa', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Keeper Scan Logs:</div>
-              <div style={{
-                maxHeight: 180, overflowY: 'auto', background: '#000', border: '1px solid #222', borderRadius: 6,
-                padding: 12, fontFamily: 'var(--ff-mono)', fontSize: 11, color: '#ccc', display: 'flex', flexDirection: 'column', gap: 6
-              }}>
-                {scanLogs.map((log, idx) => (
-                  <div key={idx} style={{ display: 'flex', gap: 8, color: log.type === 'success' ? 'var(--ff-success)' : log.type === 'warn' ? 'var(--ff-primary)' : '#888' }}>
-                    <span style={{ color: '#555' }}>[{log.time}]</span>
-                    <span>{log.msg}</span>
-                  </div>
-                ))}
-                <div ref={logEndRef} />
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      {/* Portfolio Stats */}
-      <div className="card">
-        <div className="card-header"><span className="card-title">My Realized Yield (On-Chain)</span></div>
-        <div className="stats-grid" style={{ marginBottom: 0 }}>
-          <div className="stat-card" style={{ background: 'var(--ff-bg)' }}>
-            <div className="stat-label">Total Realized Profit</div>
-            <div className="stat-value" style={{ fontSize: 24, color: 'var(--ff-success)' }}>
-              {vaultActive && scanLogs.some(l => l.msg.includes('Complete')) ? '$1,344.00' : '$0.00'}
-            </div>
-          </div>
-          <div className="stat-card" style={{ background: 'var(--ff-bg)' }}>
-            <div className="stat-label">Invoices Funded</div>
-            <div className="stat-value" style={{ fontSize: 24 }}>
-              {vaultActive && scanLogs.some(l => l.msg.includes('Complete')) ? '1' : '0'}
-            </div>
-          </div>
+          <button className="btn btn-primary" style={{ marginTop: 8, width: '100%', gap: 6 }} onClick={() => toast.success('Keeper rules updated locally!')}>
+            <Settings size={16} /> Apply Risk Parameter Guidelines
+          </button>
         </div>
       </div>
     </>

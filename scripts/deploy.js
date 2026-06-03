@@ -20,15 +20,21 @@ const arcTestnet = defineChain({
 });
 
 async function main() {
-  console.log('=== FactorFi Deployment ===\n');
+  console.log('=== FactorFi & AutoFactorVault Deployment ===\n');
 
-  // 1. Compile
-  const contractPath = path.join(__dirname, '..', 'contracts', 'FactorFi.sol');
-  const source = fs.readFileSync(contractPath, 'utf8');
+  // 1. Compile both contracts
+  const factorFiPath = path.join(__dirname, '..', 'contracts', 'FactorFi.sol');
+  const vaultPath = path.join(__dirname, '..', 'contracts', 'AutoFactorVault.sol');
+  
+  const factorFiSource = fs.readFileSync(factorFiPath, 'utf8');
+  const vaultSource = fs.readFileSync(vaultPath, 'utf8');
 
   const input = {
     language: 'Solidity',
-    sources: { 'FactorFi.sol': { content: source } },
+    sources: { 
+      'FactorFi.sol': { content: factorFiSource },
+      'AutoFactorVault.sol': { content: vaultSource }
+    },
     settings: {
       viaIR: true,
       optimizer: { enabled: true, runs: 200 },
@@ -36,7 +42,7 @@ async function main() {
     },
   };
 
-  console.log('Compiling FactorFi.sol...');
+  console.log('Compiling contracts with solc...');
   const output = JSON.parse(solc.compile(JSON.stringify(input)));
 
   if (output.errors) {
@@ -48,14 +54,15 @@ async function main() {
     }
   }
 
-  const contract = output.contracts['FactorFi.sol']['FactorFi'];
-  const abi = contract.abi;
-  const bytecode = `0x${contract.evm.bytecode.object}`;
-  console.log('Compiled successfully. Bytecode length:', bytecode.length);
+  const factorFiContract = output.contracts['FactorFi.sol']['FactorFi'];
+  const vaultContract = output.contracts['AutoFactorVault.sol']['AutoFactorVault'];
+
+  console.log('FactorFi compilation complete.');
+  console.log('AutoFactorVault compilation complete.');
 
   // 2. Setup account
   const account = privateKeyToAccount(`0x${process.env.PRIVATE_KEY}`);
-  console.log('Deployer:', account.address);
+  console.log('Deployer Account:', account.address);
 
   const publicClient = createPublicClient({ chain: arcTestnet, transport: http() });
   const walletClient = createWalletClient({ account, chain: arcTestnet, transport: http() });
@@ -69,41 +76,61 @@ async function main() {
     process.exit(1);
   }
 
-  // 3. Deploy
+  // 3. Deploy FactorFi
   const USDC_ADDRESS = '0x3600000000000000000000000000000000000000';
+  const EURC_ADDRESS = '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a';
   const PROTOCOL_FEE_BPS = 50n; // 0.5%
 
-  console.log('\nDeploying with:');
-  console.log('  USDC:', USDC_ADDRESS);
-  console.log('  Fee:', '50 bps (0.5%)');
-
-  // Encode constructor args: (address _usdc, uint256 _protocolFeeBps)
+  console.log('\nDeploying FactorFi to Arc Testnet...');
   const { encodeAbiParameters } = await import('viem');
-  const constructorArgs = encodeAbiParameters(
-    [{ type: 'address' }, { type: 'uint256' }],
-    [USDC_ADDRESS, PROTOCOL_FEE_BPS]
+  const factorFiConstructorArgs = encodeAbiParameters(
+    [{ type: 'address[]' }, { type: 'uint256' }],
+    [[USDC_ADDRESS, EURC_ADDRESS], PROTOCOL_FEE_BPS]
   );
 
-  const deployData = bytecode + constructorArgs.slice(2);
+  const factorFiDeployData = `0x${factorFiContract.evm.bytecode.object}` + factorFiConstructorArgs.slice(2);
 
-  const hash = await walletClient.deployContract({
-    abi,
-    bytecode: deployData,
+  const factorFiHash = await walletClient.deployContract({
+    abi: factorFiContract.abi,
+    bytecode: factorFiDeployData,
     args: [],
   });
 
-  console.log('Tx hash:', hash);
+  console.log('FactorFi Tx Hash:', factorFiHash);
   console.log('Waiting for confirmation...');
+  const factorFiReceipt = await publicClient.waitForTransactionReceipt({ hash: factorFiHash });
+  const factorFiAddress = factorFiReceipt.contractAddress;
+  console.log('FactorFi Deployed Address:', factorFiAddress);
 
-  const receipt = await publicClient.waitForTransactionReceipt({ hash });
-  const contractAddress = receipt.contractAddress;
+  // 4. Deploy AutoFactorVault
+  console.log('\nDeploying AutoFactorVault to Arc Testnet...');
+  const vaultConstructorArgs = encodeAbiParameters(
+    [{ type: 'address' }, { type: 'address' }, { type: 'string' }, { type: 'string' }],
+    [USDC_ADDRESS, factorFiAddress, 'FactorFi Yield Vault', 'ffUSDC']
+  );
 
-  console.log('\n✅ FactorFi deployed!');
-  console.log('Address:', contractAddress);
-  console.log('Explorer:', `https://testnet.arcscan.app/address/${contractAddress}`);
-  console.log('Tx:', `https://testnet.arcscan.app/tx/${hash}`);
-  console.log('\n📝 Update lib/contracts.ts:');
-  console.log(`export const FACTORFI_CONTRACT_ADDRESS = '${contractAddress}' as const;`);
+  const vaultDeployData = `0x${vaultContract.evm.bytecode.object}` + vaultConstructorArgs.slice(2);
+
+  const vaultHash = await walletClient.deployContract({
+    abi: vaultContract.abi,
+    bytecode: vaultDeployData,
+    args: [],
+  });
+
+  console.log('AutoFactorVault Tx Hash:', vaultHash);
+  console.log('Waiting for confirmation...');
+  const vaultReceipt = await publicClient.waitForTransactionReceipt({ hash: vaultHash });
+  const vaultAddress = vaultReceipt.contractAddress;
+  console.log('AutoFactorVault Deployed Address:', vaultAddress);
+
+  console.log('\n✅ Deployment Completed Successfully!');
+  console.log('-----------------------------------------------------------');
+  console.log('FactorFi Address:', factorFiAddress);
+  console.log('AutoFactorVault Address:', vaultAddress);
+  console.log('-----------------------------------------------------------');
+  console.log('\n📝 Update lib/contracts.ts with following values:');
+  console.log(`export const FACTORFI_CONTRACT_ADDRESS = '${factorFiAddress}' as const;`);
+  console.log(`export const AUTO_FACTOR_VAULT_ADDRESS = '${vaultAddress}' as const;`);
 }
 
 main().catch(console.error);

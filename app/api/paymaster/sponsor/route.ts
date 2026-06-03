@@ -6,7 +6,7 @@ import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi } from '@/lib/contracts'
 
 export async function POST(req: NextRequest) {
   try {
-    const { supplier, anchor, amount, dueDate, description } = await req.json()
+    const { supplier, anchor, amount, dueDate, description, invoiceHash, signature, token } = await req.json()
 
     // 1. Validation checks
     if (!supplier || !anchor || !amount || !dueDate) {
@@ -16,7 +16,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const amountParsed = parseUnits(amount, 6) // USDC uses 6 decimals
+    const activeToken = token || '0x3600000000000000000000000000000000000000'
+    const amountParsed = parseUnits(amount, 6) // Both USDC/EURC use 6 decimals on Arc
     const dueDateUnix = BigInt(Math.floor(new Date(dueDate).getTime() / 1000))
 
     if (amountParsed <= BigInt(0)) {
@@ -37,7 +38,10 @@ export async function POST(req: NextRequest) {
     console.log('Supplier (EOA/Smart Account):', supplier)
     console.log('Anchor Target:', anchor)
     console.log('Amount (Parsed 6 Decimals):', amountParsed.toString())
+    console.log('Token Target:', activeToken)
     console.log('Description:', description)
+    console.log('Invoice Hash:', invoiceHash)
+    console.log('Signature:', signature)
 
     // 2. Setup Relayer/Paymaster Wallet Client from server private key
     const privateKey = process.env.PRIVATE_KEY
@@ -64,13 +68,19 @@ export async function POST(req: NextRequest) {
     console.log('Relayer balance:', (Number(balance) / 1e18).toFixed(6), 'USDC (gas)')
 
     // 3. Formulate and broadcast sponsored transaction on Arc Testnet
-    // To implement the exact user role mapping, the transaction is sponsored by the relayer wallet,
-    // which has full USDC gas, routing the execution smoothly to the FactorFi contract.
     const txHash = await walletClient.writeContract({
       address: FACTORFI_CONTRACT_ADDRESS,
       abi: factorFiAbi,
       functionName: 'submitInvoice',
-      args: [anchor, amountParsed, dueDateUnix, description || 'Sponsored Invoice'],
+      args: [
+        anchor, 
+        amountParsed, 
+        dueDateUnix, 
+        description || 'Sponsored Invoice',
+        invoiceHash || '0x0000000000000000000000000000000000000000000000000000000000000000',
+        signature || '0x',
+        activeToken
+      ],
     })
 
     console.log('Sponsored Tx submitted successfully! Hash:', txHash)
