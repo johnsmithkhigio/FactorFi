@@ -8,14 +8,41 @@ interface IERC20 {
     function approve(address spender, uint256 amount) external returns (bool);
 }
 
+interface IRevenueDistributor {
+    event RevenueSplitUpdated(
+        uint256 treasuryShareBps,
+        uint256 underwriterShareBps,
+        uint256 reservePoolShareBps
+    );
+    event RevenueDistributed(
+        uint256 indexed invoiceId,
+        uint256 totalFeeAmount,
+        uint256 treasuryPayout,
+        uint256 underwriterPayout,
+        uint256 reservePayout
+    );
+
+    function setRevenueSplit(
+        uint256 _treasuryShareBps,
+        uint256 _underwriterShareBps,
+        uint256 _reservePoolShareBps
+    ) external;
+
+    function setRevenueAddresses(
+        address _treasuryAddress,
+        address _underwriterAddress,
+        address _reserveAddress
+    ) external;
+}
+
 /**
  * @title FactorFi — Reverse Factoring Protocol on Arc
  * @notice On-chain invoice factoring with multi-role lifecycle:
  *         Anchor → Supplier → Investor → Settlement
  * @dev Uses USDC (6 decimals) on Arc Testnet
  */
-contract FactorFi {
-    IERC20 public immutable usdc;
+contract FactorFi is IRevenueDistributor {
+    mapping(address => bool) public supportedTokens;
     address public owner;
 
     // --- Roles ---
@@ -35,7 +62,8 @@ contract FactorFi {
         address supplier;
         address anchor;
         address investor;
-        uint256 amount;        // Face value in USDC (6 decimals)
+        address token;         // Dynamic stablecoin address (USDC/EURC)
+        uint256 amount;        // Face value in tokens
         uint256 fundedAmount;  // Discounted amount investor paid
         uint256 discountBps;   // Discount in basis points (e.g. 300 = 3%)
         uint256 dueDate;
@@ -53,6 +81,19 @@ contract FactorFi {
     uint256 public totalFactoredVolume;
     uint256 public totalSettledVolume;
     uint256 public protocolFeeBps; // e.g. 50 = 0.5%
+
+    // --- Underwrite & Double-Factoring Protection ---
+    mapping(bytes32 => bool) public invoiceHashes;
+    address public underwriterAgent;
+
+    // --- Revenue Splitting Engine Storage ---
+    address public treasuryAddress;
+    address public underwriterAddress;
+    address public reserveAddress;
+    
+    uint256 public treasuryShareBps;      // basis points (e.g. 5000 = 50.00%)
+    uint256 public underwriterShareBps;   // basis points (e.g. 3000 = 30.00%)
+    uint256 public reservePoolShareBps;   // basis points (e.g. 2000 = 20.00%)
 
     // --- Credit Passport ---
     struct CreditProfile {
@@ -75,11 +116,27 @@ contract FactorFi {
     event InvoiceFunded(uint256 indexed invoiceId, address indexed investor, uint256 fundedAmount, uint256 discountBps);
     event InvoiceSettled(uint256 indexed invoiceId, address indexed anchor, uint256 investorPayout, uint256 protocolFee);
     event CreditProfileUpdated(address indexed entity, uint256 invoicesSettled, uint256 onTimeRateBps);
+    event UnderwriterAgentUpdated(address indexed newAgent);
+    event SupportedTokenUpdated(address indexed token, bool supported);
 
-    constructor(address _usdc, uint256 _protocolFeeBps) {
-        usdc = IERC20(_usdc);
+    constructor(address[] memory _tokens, uint256 _protocolFeeBps) {
         owner = msg.sender;
+        underwriterAgent = msg.sender; // default underwriter
         protocolFeeBps = _protocolFeeBps;
+
+        for (uint256 i = 0; i < _tokens.length; i++) {
+            require(_tokens[i] != address(0), "Invalid token");
+            supportedTokens[_tokens[i]] = true;
+        }
+
+        // Initialize revenue splitting configurations to 50% / 30% / 20%
+        treasuryAddress = msg.sender;
+        underwriterAddress = msg.sender;
+        reserveAddress = msg.sender;
+
+        treasuryShareBps = 5000;
+        underwriterShareBps = 3000;
+        reservePoolShareBps = 2000;
     }
 
     // ========== ANCHOR FUNCTIONS ==========
@@ -117,18 +174,36 @@ contract FactorFi {
 
         // Anchor pays face value
         uint256 faceValue = inv.amount;
-        uint256 protocolFee = (faceValue * protocolFeeBps) / 10000;
-        uint256 investorPayout = faceValue - protocolFee;
+        uint256 totalFeeAmount = (faceValue * protocolFeeBps) / 10000;
+        uint256 investorPayout = faceValue - totalFeeAmount;
 
         // Transfer from anchor: face value
-        require(usdc.transferFrom(msg.sender, address(this), faceValue), "Anchor payment failed");
+        require(IERC20(inv.token).transferFrom(msg.sender, address(this), faceValue), "Anchor payment failed");
 
         // Pay investor: face value minus protocol fee
         if (investorPayout > 0) {
-            require(usdc.transfer(inv.investor, investorPayout), "Investor payout failed");
+            require(IERC20(inv.token).transfer(inv.investor, investorPayout), "Investor payout failed");
         }
 
-        // Protocol fee stays in contract (owner can withdraw)
+        // Split and distribute the protocol fee instantly
+        if (totalFeeAmount > 0) {
+            uint256 treasuryPayout = (totalFeeAmount * treasuryShareBps) / 10000;
+            uint256 underwriterPayout = (totalFeeAmount * underwriterShareBps) / 10000;
+            uint256 reservePayout = totalFeeAmount - treasuryPayout - underwriterPayout; // round down dust to reserve pool
+
+            if (treasuryPayout > 0) {
+                require(IERC20(inv.token).transfer(treasuryAddress, treasuryPayout), "Treasury fee payout failed");
+            }
+            if (underwriterPayout > 0) {
+                require(IERC20(inv.token).transfer(underwriterAddress, underwriterPayout), "Underwriter fee payout failed");
+            }
+            if (reservePayout > 0) {
+                require(IERC20(inv.token).transfer(reserveAddress, reservePayout), "Reserve fee payout failed");
+            }
+
+            emit RevenueDistributed(_invoiceId, totalFeeAmount, treasuryPayout, underwriterPayout, reservePayout);
+        }
+
         inv.status = InvoiceStatus.Settled;
         inv.settledAt = block.timestamp;
         anchors[msg.sender].totalSettled += faceValue;
@@ -138,7 +213,7 @@ contract FactorFi {
         _updateCreditProfile(msg.sender, true, inv.settledAt - inv.fundedAt, faceValue);
         _updateCreditProfile(inv.supplier, true, inv.settledAt - inv.createdAt, faceValue);
 
-        emit InvoiceSettled(_invoiceId, msg.sender, investorPayout, protocolFee);
+        emit InvoiceSettled(_invoiceId, msg.sender, investorPayout, totalFeeAmount);
     }
 
     // ========== SUPPLIER FUNCTIONS ==========
@@ -147,11 +222,26 @@ contract FactorFi {
         address _anchor,
         uint256 _amount,
         uint256 _dueDate,
-        string calldata _description
+        string calldata _description,
+        bytes32 _invoiceHash,
+        bytes calldata _signature,
+        address _token
     ) external returns (uint256) {
+        require(supportedTokens[_token], "Token not supported");
         require(anchors[_anchor].isRegistered, "Anchor not registered");
         require(_amount > 0, "Amount must be > 0");
         require(_dueDate > block.timestamp, "Due date must be future");
+        
+        // 1. Double-Factoring Protection check
+        require(!invoiceHashes[_invoiceHash], "Invoice already factored on-chain");
+        invoiceHashes[_invoiceHash] = true;
+
+        // 2. Underwriter Agent signature verification
+        if (underwriterAgent != address(0)) {
+            bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _invoiceHash));
+            address signer = recoverSigner(ethSignedMessageHash, _signature);
+            require(signer == underwriterAgent, "Invalid AI Underwriter signature verification");
+        }
 
         uint256 id = nextInvoiceId++;
         invoices[id] = Invoice({
@@ -159,6 +249,7 @@ contract FactorFi {
             supplier: msg.sender,
             anchor: _anchor,
             investor: address(0),
+            token: _token,
             amount: _amount,
             fundedAmount: 0,
             discountBps: 0,
@@ -184,10 +275,10 @@ contract FactorFi {
         uint256 discountedAmount = inv.amount - (inv.amount * _discountBps / 10000);
 
         // Investor pays discounted amount
-        require(usdc.transferFrom(msg.sender, address(this), discountedAmount), "Funding failed");
+        require(IERC20(inv.token).transferFrom(msg.sender, address(this), discountedAmount), "Funding failed");
 
         // Supplier gets immediate payment (discounted)
-        require(usdc.transfer(inv.supplier, discountedAmount), "Supplier payout failed");
+        require(IERC20(inv.token).transfer(inv.supplier, discountedAmount), "Supplier payout failed");
 
         inv.investor = msg.sender;
         inv.fundedAmount = discountedAmount;
@@ -249,7 +340,7 @@ contract FactorFi {
         if (_onTime && profile.totalAmountSettled > 0) {
             uint256 settlementDays = _settlementTime / 86400;
             if (settlementDays == 0 && _settlementTime > 0) {
-                settlementDays = 1; // Safeguard rounding issues
+                settlementDays = 1;
             }
             if (previousAmountSettled == 0) {
                 profile.weightedAvgSettlementDays = settlementDays;
@@ -265,14 +356,72 @@ contract FactorFi {
         emit CreditProfileUpdated(_entity, profile.invoicesSettled, profile.onTimeRateBps);
     }
 
-    // ========== OWNER ==========
+    // ========== SIGNATURE RECOVERY HELPERS ==========
 
-    function withdrawFees(address _to) external {
-        require(msg.sender == owner, "Not owner");
-        uint256 balance = usdc.balanceOf(address(this));
-        if (balance > 0) {
-            require(usdc.transfer(_to, balance), "Withdraw failed");
+    function recoverSigner(bytes32 _ethSignedMessageHash, bytes memory _sig) public pure returns (address) {
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_sig);
+        return ecrecover(_ethSignedMessageHash, v, r, s);
+    }
+
+    function splitSignature(bytes memory sig) public pure returns (bytes32 r, bytes32 s, uint8 v) {
+        require(sig.length == 65, "invalid signature length");
+        assembly {
+            r := mload(add(sig, 32))
+            s := mload(add(sig, 64))
+            v := byte(0, mload(add(sig, 96)))
         }
+    }
+
+    // ========== OWNER & REVENUE SPLITTING ROLES ==========
+
+    function setRevenueSplit(
+        uint256 _treasuryShareBps,
+        uint256 _underwriterShareBps,
+        uint256 _reservePoolShareBps
+    ) external override {
+        require(msg.sender == owner, "Not owner");
+        require(_treasuryShareBps + _underwriterShareBps + _reservePoolShareBps == 10000, "Share splits sum must equal 10000 BPS (100.00%)");
+        
+        treasuryShareBps = _treasuryShareBps;
+        underwriterShareBps = _underwriterShareBps;
+        reservePoolShareBps = _reservePoolShareBps;
+        
+        emit RevenueSplitUpdated(_treasuryShareBps, _underwriterShareBps, _reservePoolShareBps);
+    }
+
+    function setRevenueAddresses(
+        address _treasuryAddress,
+        address _underwriterAddress,
+        address _reserveAddress
+    ) external override {
+        require(msg.sender == owner, "Not owner");
+        require(_treasuryAddress != address(0) && _underwriterAddress != address(0) && _reserveAddress != address(0), "Invalid address");
+        
+        treasuryAddress = _treasuryAddress;
+        underwriterAddress = _underwriterAddress;
+        reserveAddress = _reserveAddress;
+    }
+
+    function setUnderwriterAgent(address _agent) external {
+        require(msg.sender == owner, "Not owner");
+        underwriterAgent = _agent;
+        emit UnderwriterAgentUpdated(_agent);
+    }
+
+    function withdrawFees(address _token, address _to) external {
+        require(msg.sender == owner, "Not owner");
+        require(supportedTokens[_token], "Token not supported");
+        uint256 balance = IERC20(_token).balanceOf(address(this));
+        if (balance > 0) {
+            require(IERC20(_token).transfer(_to, balance), "Withdraw failed");
+        }
+    }
+
+    function setSupportedToken(address _token, bool _supported) external {
+        require(msg.sender == owner, "Not owner");
+        require(_token != address(0), "Invalid token");
+        supportedTokens[_token] = _supported;
+        emit SupportedTokenUpdated(_token, _supported);
     }
 
     function setProtocolFee(uint256 _feeBps) external {
