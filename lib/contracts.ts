@@ -7,6 +7,8 @@ export const EURC_ADDRESS_ARC = '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a' as 
 // Deployed on Arc Testnet — Tx: 0x89a70c6b0532983faa77cd536d514ff6e7f8e02fa9ada85f0d41dc57c37a93aa
 export const FACTORFI_CONTRACT_ADDRESS = '0x470f9ec27d1d8aecf15e57b149d70fd66aa295d6' as const;
 export const AUTO_FACTOR_VAULT_ADDRESS = '0x8bB48C4D889cc9b0ee5064bc52c15558e738c82a' as const;
+export const INVOICE_RECEIPT_NFT_ADDRESS = '0xeD8B895C9c4Adf31969B6048d0859F54eE742d48' as const;
+export const FACTORFI_MARKETPLACE_ADDRESS = '0x8b8577583A89fB231D56D16F6D6f5B4A9C168393' as const;
 
 export const USDC_DECIMALS = 6;
 
@@ -30,6 +32,13 @@ export const usdcAbi = [
     name: 'allowance',
     outputs: [{ name: '', type: 'uint256' }],
     stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'recipient', type: 'address' }, { name: 'amount', type: 'uint256' }],
+    name: 'transfer',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
     type: 'function',
   },
   {
@@ -88,6 +97,27 @@ export const factorFiAbi = [
     name: 'fundInvoice',
     outputs: [],
     stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: '_invoiceId', type: 'uint256' }],
+    name: 'tokenizeInvoice',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: '', type: 'uint256' }],
+    name: 'isTokenized',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'receiptNFT',
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
     type: 'function',
   },
 
@@ -252,6 +282,25 @@ export const factorFiAbi = [
     name: 'reserveAddress',
     outputs: [{ name: '', type: 'address' }],
     stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: '', type: 'address' }],
+    name: 'isCompliant',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: '_user', type: 'address' },
+      { name: '_status', type: 'bool' },
+      { name: '_timestamp', type: 'uint256' },
+      { name: '_signature', type: 'bytes' }
+    ],
+    name: 'updateComplianceStatusWithSignature',
+    outputs: [],
+    stateMutability: 'nonpayable',
     type: 'function',
   },
 
@@ -498,6 +547,133 @@ export const autoFactorVaultAbi = [
     name: 'approve',
     outputs: [{ name: '', type: 'bool' }],
     stateMutability: 'nonpayable',
+    type: 'function'
+  }
+] as const;
+
+export const invoiceReceiptNftAbi = [
+  {
+    inputs: [{ name: 'owner', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function'
+  },
+  {
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    name: 'ownerOf',
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function'
+  },
+  {
+    inputs: [{ name: 'to', type: 'address' }, { name: 'tokenId', type: 'uint256' }],
+    name: 'approve',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  },
+  {
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    name: 'getApproved',
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function'
+  },
+  {
+    inputs: [{ name: 'operator', type: 'address' }, { name: 'approved', type: 'bool' }],
+    name: 'setApprovalForAll',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  },
+  {
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'operator', type: 'address' }
+    ],
+    name: 'isApprovedForAll',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
+    type: 'function'
+  },
+  {
+    inputs: [
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'tokenId', type: 'uint256' }
+    ],
+    name: 'transferFrom',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  },
+  {
+    inputs: [
+      { name: 'from', type: 'address' },
+      { name: 'to', type: 'address' },
+      { name: 'tokenId', type: 'uint256' }
+    ],
+    name: 'safeTransferFrom',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  }
+] as const;
+
+export const factorFiMarketplaceAbi = [
+  {
+    inputs: [
+      { name: 'tokenId', type: 'uint256' },
+      { name: 'price', type: 'uint256' }
+    ],
+    name: 'listInvoice',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  },
+  {
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    name: 'cancelListing',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  },
+  {
+    inputs: [{ name: 'tokenId', type: 'uint256' }],
+    name: 'buyInvoice',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  },
+  {
+    inputs: [],
+    name: 'getActiveListings',
+    outputs: [
+      {
+        components: [
+          { name: 'tokenId', type: 'uint256' },
+          { name: 'seller', type: 'address' },
+          { name: 'price', type: 'uint256' },
+          { name: 'active', type: 'bool' }
+        ],
+        name: '',
+        type: 'tuple[]'
+      }
+    ],
+    stateMutability: 'view',
+    type: 'function'
+  },
+  {
+    inputs: [{ name: '', type: 'uint256' }],
+    name: 'listings',
+    outputs: [
+      { name: 'tokenId', type: 'uint256' },
+      { name: 'seller', type: 'address' },
+      { name: 'price', type: 'uint256' },
+      { name: 'active', type: 'bool' }
+    ],
+    stateMutability: 'view',
     type: 'function'
   }
 ] as const;
