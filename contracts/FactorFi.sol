@@ -8,6 +8,11 @@ interface IERC20 {
     function approve(address spender, uint256 amount) external returns (bool);
 }
 
+interface IInvoiceReceiptNFT {
+    function mint(address to, uint256 tokenId) external;
+    function ownerOf(uint256 tokenId) external view returns (address);
+}
+
 interface IRevenueDistributor {
     event RevenueSplitUpdated(
         uint256 treasuryShareBps,
@@ -86,6 +91,19 @@ contract FactorFi is IRevenueDistributor {
     mapping(bytes32 => bool) public invoiceHashes;
     address public underwriterAgent;
 
+    // --- Secondary Market Tokenization ---
+    address public receiptNFT;
+    mapping(uint256 => bool) public isTokenized;
+
+    // --- Circle Compliance Integration ---
+    mapping(address => bool) public isCompliant;
+    address public complianceSigner;
+
+    modifier onlyCompliant() {
+        require(isCompliant[msg.sender], "Address is not compliant");
+        _;
+    }
+
     // --- Revenue Splitting Engine Storage ---
     address public treasuryAddress;
     address public underwriterAddress;
@@ -118,11 +136,17 @@ contract FactorFi is IRevenueDistributor {
     event CreditProfileUpdated(address indexed entity, uint256 invoicesSettled, uint256 onTimeRateBps);
     event UnderwriterAgentUpdated(address indexed newAgent);
     event SupportedTokenUpdated(address indexed token, bool supported);
+    event ComplianceStatusUpdated(address indexed user, bool status);
+    event ComplianceSignerUpdated(address indexed newSigner);
 
     constructor(address[] memory _tokens, uint256 _protocolFeeBps) {
         owner = msg.sender;
         underwriterAgent = msg.sender; // default underwriter
         protocolFeeBps = _protocolFeeBps;
+
+        // Initialize compliance
+        isCompliant[msg.sender] = true;
+        complianceSigner = msg.sender;
 
         for (uint256 i = 0; i < _tokens.length; i++) {
             require(_tokens[i] != address(0), "Invalid token");
@@ -141,7 +165,7 @@ contract FactorFi is IRevenueDistributor {
 
     // ========== ANCHOR FUNCTIONS ==========
 
-    function registerAnchor(string calldata _name, uint256 _creditRating) external {
+    function registerAnchor(string calldata _name, uint256 _creditRating) external onlyCompliant {
         require(!anchors[msg.sender].isRegistered, "Already registered");
         require(_creditRating <= 1000, "Rating 0-1000");
 
@@ -182,7 +206,11 @@ contract FactorFi is IRevenueDistributor {
 
         // Pay investor: face value minus protocol fee
         if (investorPayout > 0) {
-            require(IERC20(inv.token).transfer(inv.investor, investorPayout), "Investor payout failed");
+            address currentInvestor = inv.investor;
+            if (isTokenized[_invoiceId]) {
+                currentInvestor = IInvoiceReceiptNFT(receiptNFT).ownerOf(_invoiceId);
+            }
+            require(IERC20(inv.token).transfer(currentInvestor, investorPayout), "Investor payout failed");
         }
 
         // Split and distribute the protocol fee instantly
@@ -226,7 +254,7 @@ contract FactorFi is IRevenueDistributor {
         bytes32 _invoiceHash,
         bytes calldata _signature,
         address _token
-    ) external returns (uint256) {
+    ) external onlyCompliant returns (uint256) {
         require(supportedTokens[_token], "Token not supported");
         require(anchors[_anchor].isRegistered, "Anchor not registered");
         require(_amount > 0, "Amount must be > 0");
@@ -267,7 +295,7 @@ contract FactorFi is IRevenueDistributor {
 
     // ========== INVESTOR FUNCTIONS ==========
 
-    function fundInvoice(uint256 _invoiceId, uint256 _discountBps) external {
+    function fundInvoice(uint256 _invoiceId, uint256 _discountBps) external onlyCompliant {
         Invoice storage inv = invoices[_invoiceId];
         require(inv.status == InvoiceStatus.Approved, "Not approved");
         require(_discountBps > 0 && _discountBps < 5000, "Discount 1-4999 bps");
@@ -428,5 +456,56 @@ contract FactorFi is IRevenueDistributor {
         require(msg.sender == owner, "Not owner");
         require(_feeBps <= 500, "Max 5%");
         protocolFeeBps = _feeBps;
+    }
+
+    event InvoiceTokenized(uint256 indexed invoiceId, address indexed investor);
+
+    function setReceiptNFT(address _receiptNFT) external {
+        require(msg.sender == owner, "Not owner");
+        require(_receiptNFT != address(0), "Invalid NFT address");
+        receiptNFT = _receiptNFT;
+    }
+
+    function tokenizeInvoice(uint256 _invoiceId) external {
+        Invoice storage inv = invoices[_invoiceId];
+        require(inv.status == InvoiceStatus.Funded, "Invoice must be in Funded status");
+        require(inv.investor == msg.sender, "Only the investor can tokenize");
+        require(!isTokenized[_invoiceId], "Invoice already tokenized");
+
+        isTokenized[_invoiceId] = true;
+        IInvoiceReceiptNFT(receiptNFT).mint(msg.sender, _invoiceId);
+
+        emit InvoiceTokenized(_invoiceId, msg.sender);
+    }
+
+    // --- Circle Compliance Integration Functions ---
+    function updateComplianceStatus(address _user, bool _status) external {
+        require(msg.sender == owner, "Not owner");
+        isCompliant[_user] = _status;
+        emit ComplianceStatusUpdated(_user, _status);
+    }
+
+    function setComplianceSigner(address _signer) external {
+        require(msg.sender == owner, "Not owner");
+        complianceSigner = _signer;
+        emit ComplianceSignerUpdated(_signer);
+    }
+
+    function updateComplianceStatusWithSignature(
+        address _user,
+        bool _status,
+        uint256 _timestamp,
+        bytes memory _signature
+    ) external {
+        require(block.timestamp <= _timestamp + 86400, "Signature expired");
+
+        bytes32 messageHash = keccak256(abi.encodePacked(_user, _status, _timestamp));
+        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+
+        address recoveredSigner = recoverSigner(ethSignedMessageHash, _signature);
+        require(recoveredSigner == complianceSigner, "Invalid compliance signature");
+
+        isCompliant[_user] = _status;
+        emit ComplianceStatusUpdated(_user, _status);
     }
 }

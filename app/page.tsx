@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useReadContract } from 'wagmi'
 import { LayoutDashboard, FileText, Building2, TrendingUp, Shield, ArrowRightLeft, ExternalLink, Hexagon, Home } from 'lucide-react'
-import { USDC_ADDRESS_ARC, usdcAbi } from '@/lib/contracts'
+import { USDC_ADDRESS_ARC, usdcAbi, FACTORFI_CONTRACT_ADDRESS, factorFiAbi } from '@/lib/contracts'
 import { formatUSDC, getExplorerAddressLink } from '@/lib/utils'
 
 import LandingView from './views/LandingView'
@@ -17,6 +17,7 @@ import CreditView from './views/CreditView'
 
 import { useUnifiedAccount } from '@/lib/web3-provider'
 import EmbeddedAuth from './components/EmbeddedAuth'
+import ComplianceModal from './components/ComplianceModal'
 
 type View = 'landing' | 'dashboard' | 'supplier' | 'anchor' | 'investor' | 'bridge' | 'credit'
 
@@ -40,6 +41,14 @@ export default function FactorFiApp() {
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
     query: { enabled: !!address, refetchInterval: 10000 },
+  })
+
+  const { data: isCompliant, refetch: refetchCompliance } = useReadContract({
+    address: FACTORFI_CONTRACT_ADDRESS,
+    abi: factorFiAbi,
+    functionName: 'isCompliant',
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
   })
 
   const renderView = () => {
@@ -114,6 +123,11 @@ export default function FactorFiApp() {
           {renderView()}
         </div>
       </main>
+
+      {/* Circle Compliance Onboarding Modal */}
+      {isConnected && activeView !== 'landing' && isCompliant === false && (
+        <ComplianceModal onVerificationComplete={refetchCompliance} />
+      )}
     </div>
   )
 }

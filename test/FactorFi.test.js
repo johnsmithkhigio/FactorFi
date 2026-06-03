@@ -26,6 +26,12 @@ describe('FactorFi Double Factoring & AI Underwriter Signature Tests', function 
     // Set the underwriter agent address
     await factorFi.setUnderwriterAgent(underwriter.address);
 
+    // Whitelist test addresses for compliance
+    await factorFi.updateComplianceStatus(owner.address, true);
+    await factorFi.updateComplianceStatus(supplier.address, true);
+    await factorFi.updateComplianceStatus(anchor.address, true);
+    await factorFi.updateComplianceStatus(underwriter.address, true);
+
     // Register anchor
     await factorFi.connect(anchor).registerAnchor('Acme Corp', 950n);
   });

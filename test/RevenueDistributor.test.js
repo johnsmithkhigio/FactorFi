@@ -39,6 +39,13 @@ describe('FactorFi Protocol Revenue Engine & Fee Splitting Tests', function () {
     // Set underwriter agent
     await factorFi.setUnderwriterAgent(underwriterAgent.address);
 
+    // Whitelist test addresses for compliance
+    await factorFi.updateComplianceStatus(owner.address, true);
+    await factorFi.updateComplianceStatus(supplier.address, true);
+    await factorFi.updateComplianceStatus(anchor.address, true);
+    await factorFi.updateComplianceStatus(investor.address, true);
+    await factorFi.updateComplianceStatus(underwriterAgent.address, true);
+
     // Register anchor
     await factorFi.connect(anchor).registerAnchor('Acme Corp', 950n);
 
