@@ -114,9 +114,8 @@ async function runKeeper() {
     process.exit(1)
   }
 
-  // Set mock or read addresses
-  const FACTORFI_ADDRESS = '0x470f9ec27d1d8aecf15e57b149d70fd66aa295d6'
-  const VAULT_ADDRESS = '0x8bB48C4D889cc9b0ee5064bc52c15558e738c82a' // Mock/Deployed placeholder address
+  const FACTORFI_ADDRESS = process.env.FACTORFI_ADDRESS || '0xf3aceefa36e2c8a501eaef9b44df8859159800ed'
+  const VAULT_ADDRESS = process.env.AUTO_FACTOR_VAULT_ADDRESS || '0x8bB48C4D889cc9b0ee5064bc52c15558e738c82a'
 
   const account = privateKeyToAccount(`0x${privateKey}`)
   console.log('Keeper Identity Address:', account.address)

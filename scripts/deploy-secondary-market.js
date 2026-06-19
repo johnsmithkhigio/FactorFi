@@ -66,7 +66,7 @@ async function main() {
   const publicClient = createPublicClient({ chain: arcTestnet, transport: http() });
   const walletClient = createWalletClient({ account, chain: arcTestnet, transport: http() });
 
-  const FACTORFI_ADDRESS = '0x470f9ec27d1d8aecf15e57b149d70fd66aa295d6';
+  const FACTORFI_ADDRESS = process.env.FACTORFI_ADDRESS || '0xf3aceefa36e2c8a501eaef9b44df8859159800ed';
 
   // 1. Deploy InvoiceReceiptNFT
   console.log('\nDeploying InvoiceReceiptNFT...');

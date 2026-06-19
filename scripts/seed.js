@@ -16,7 +16,7 @@ const arcTestnet = defineChain({
   rpcUrls: { default: { http: ['https://rpc.testnet.arc.network'] } },
 });
 
-const FACTORFI_ADDRESS = '0x470f9ec27d1d8aecf15e57b149d70fd66aa295d6';
+const FACTORFI_ADDRESS = process.env.FACTORFI_ADDRESS || '0xf3aceefa36e2c8a501eaef9b44df8859159800ed';
 const USDC_ADDRESS = '0x3600000000000000000000000000000000000000';
 
 async function main() {
