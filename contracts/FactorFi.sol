@@ -255,6 +255,23 @@ contract FactorFi is IRevenueDistributor {
         bytes calldata _signature,
         address _token
     ) external onlyCompliant returns (uint256) {
+        return submitInvoiceOnBehalf(msg.sender, _anchor, _amount, _dueDate, _description, _invoiceHash, _signature, _token);
+    }
+
+    function submitInvoiceOnBehalf(
+        address _supplier,
+        address _anchor,
+        uint256 _amount,
+        uint256 _dueDate,
+        string calldata _description,
+        bytes32 _invoiceHash,
+        bytes calldata _signature,
+        address _token
+    ) public onlyCompliant returns (uint256) {
+        require(isCompliant[_supplier], "Supplier is not compliant");
+        if (msg.sender != _supplier) {
+            require(msg.sender == owner, "Only owner can submit on behalf of supplier");
+        }
         require(supportedTokens[_token], "Token not supported");
         require(anchors[_anchor].isRegistered, "Anchor not registered");
         require(_amount > 0, "Amount must be > 0");
@@ -274,7 +291,7 @@ contract FactorFi is IRevenueDistributor {
         uint256 id = nextInvoiceId++;
         invoices[id] = Invoice({
             id: id,
-            supplier: msg.sender,
+            supplier: _supplier,
             anchor: _anchor,
             investor: address(0),
             token: _token,
@@ -289,7 +306,7 @@ contract FactorFi is IRevenueDistributor {
             status: InvoiceStatus.Submitted
         });
 
-        emit InvoiceSubmitted(id, msg.sender, _anchor, _amount, _dueDate, _description);
+        emit InvoiceSubmitted(id, _supplier, _anchor, _amount, _dueDate, _description);
         return id;
     }
 
