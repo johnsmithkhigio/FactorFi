@@ -79,7 +79,7 @@ export default function LandingView({ onLaunchApp }: LandingViewProps) {
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--ff-primary-subtle)', border: '1px solid var(--ff-primary)', padding: '6px 14px', borderRadius: 20, marginBottom: 24 }}>
           <Zap size={14} color="var(--ff-primary)" className="pulse" />
           <span style={{ fontSize: 11.5, fontWeight: 600, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Built for Track 2 — Stablecoins Commerce Stack
+            Institutional Reverse Factoring Protocol
           </span>
         </div>
 
@@ -162,7 +162,7 @@ export default function LandingView({ onLaunchApp }: LandingViewProps) {
       {/* 3. BENTO GRID FEATURES */}
       <section id="demo-section" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         <div style={{ textAlign: 'center' }}>
-          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#fff' }}>Powering the Stablecoins Commerce Stack</h2>
+          <h2 style={{ fontSize: 24, fontWeight: 700, color: '#fff' }}>Powering On-Chain Trade Finance Rails</h2>
           <p style={{ color: 'var(--ff-text-muted)', fontSize: 13, marginTop: 4 }}>Deep integration with Arc and Circle developer tools</p>
         </div>
 
@@ -347,7 +347,7 @@ export default function LandingView({ onLaunchApp }: LandingViewProps) {
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ff-primary)' }}>Built for Global Commercial Inflows</div>
           <p style={{ color: 'var(--ff-text-secondary)', fontSize: 13.5, lineHeight: 1.6 }}>
-            Trade finance is currently controlled by a central oligarchy of commercial banks who dictate high interest spreads and lock out small, starting businesses. FactorFi was founded during **The Stablecoins Commerce Stack Challenge** to return control to the innovators. By combining native USDC gas and circle attestation, we create a transparent, frictionless lending pipeline where SMEs get cash instantly and capital sponsors enjoy robust yields.
+            Trade finance is currently controlled by a central oligarchy of commercial banks who dictate high interest spreads and lock out small, starting businesses. FactorFi was founded as a decentralized protocol to return control to the innovators. By combining native USDC gas and circle attestation, we create a transparent, frictionless lending pipeline where SMEs get cash instantly and capital sponsors enjoy robust yields.
           </p>
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', borderTop: '1px solid var(--ff-border)', paddingTop: 16 }}>
             {[

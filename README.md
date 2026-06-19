@@ -1,6 +1,6 @@
 # FactorFi — Institutional Reverse Factoring Protocol
 
-FactorFi is an institutional-grade decentralized trade finance protocol built on the **Arc Testnet** for the "Stablecoins Commerce Stack Challenge". It leverages **Circle's Stablecoin infrastructure** (USDC, CCTP, App Kit, Programmable Wallets) to solve the $3 Trillion SME trade finance gap by enabling instant invoice liquidity.
+FactorFi is an institutional-grade decentralized trade finance protocol built on the **Arc Testnet** for high-fidelity stablecoin invoices. It leverages **Circle's Stablecoin infrastructure** (USDC, CCTP, App Kit, Programmable Wallets) to solve the $3 Trillion SME trade finance gap by enabling instant invoice liquidity.
 
 [![Demo Video](https://img.shields.io/badge/Demo-Live_on_Vercel-success)](https://factorfi.vercel.app/)
 [![Network](https://img.shields.io/badge/Network-Arc_Testnet-blue)](https://testnet.arcscan.app/)
@@ -82,4 +82,4 @@ npm install
 npm run dev
 ```
 
-*Built for the Arc Hackathon. Empowering SMEs with programmable money.*
+*Empowering SMEs with programmable money and frictionless stablecoin trade rails.*
