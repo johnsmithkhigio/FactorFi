@@ -47,14 +47,12 @@ export default function BridgeView() {
     setBridgeLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`])
   }
 
-  // Handles real Circle SDK or high-fidelity visualizer CCTP sandbox bridging
+  // Handles real Circle SDK CCTP bridging
   const handleBridge = async () => {
     if (!amount || Number(amount) <= 0) return toast.error('Enter a valid amount')
     if (!walletClient) return toast.error('Please connect your wallet')
     
     setBridgeLogs([])
-    const sourceConfig = CCTP_CHAINS[sourceChain]
-    const destConfig = CCTP_CHAINS['Arc_Testnet']
     const transferId = 'cctp_' + Date.now()
 
     // 1. Initial State Caching in LocalStorage
@@ -71,120 +69,82 @@ export default function BridgeView() {
     setCachedTransfers(CCTPBridgeService.getCachedTransfers())
 
     try {
-      const KIT_KEY = process.env.NEXT_PUBLIC_CIRCLE_KIT_KEY
+      addLog('Connecting to Circle App Kit client provider...')
+      const appKitModule = await import('@circle-fin/app-kit')
+      const adapterModule = await import('@circle-fin/adapter-viem-v2')
+      
+      const provider = typeof window !== 'undefined' ? (window as any).ethereum : null
+      if (!provider) {
+        throw new Error('EIP-1193 provider not found. Connect wallet.')
+      }
 
-      if (KIT_KEY && KIT_KEY !== 'placeholder') {
-        // PRODUCTION CCTP EXECUTION VIA APP KIT SDK
-        addLog('Connecting to Circle App Kit client provider...')
-        const appKitModule = await import('@circle-fin/app-kit')
-        const adapterModule = await import('@circle-fin/adapter-viem-v2')
-        
-        // @ts-ignore
-        const adapter = await adapterModule.createViemAdapterFromProvider({ 
-          provider: typeof window !== 'undefined' ? (window as any).ethereum : null 
-        })
-        
-        // @ts-ignore
-        const kit = new appKitModule.AppKit({ apiKey: KIT_KEY })
-        
+      const adapter = await adapterModule.createViemAdapterFromProvider({ provider })
+      const kit = new appKitModule.AppKit()
+      
+      // Subscribe to real-time events to update progress & logs
+      kit.on('bridge.approve', (payload) => {
         setStep('approving')
         setProgress(15)
-        addLog(`Initiating TokenMessenger allowance approval for ${amount} USDC...`)
+        addLog(`USDC spender approval transaction sent: ${payload.values.txHash}`)
+      })
 
-        // Real cross-chain bridge execution
-        // @ts-ignore
-        const result = await kit.bridge({
-          from: { adapter, chain: sourceChain as any },
-          to: { adapter, chain: 'Arc_Testnet' },
-          amount: amount,
-        })
-
-        console.log('App Kit bridge transaction resolved:', result)
+      kit.on('bridge.burn', (payload) => {
+        setStep('burning')
+        setProgress(40)
+        addLog(`USDC successfully burned on source chain: ${payload.values.txHash}`)
         
-        // Cache transaction result data
         const updated: CachedTransfer = {
           ...initialTransfer,
-          burnTxHash: (result as any)?.burnTxHash || '0x_burn_hash',
-          messageHash: (result as any)?.messageHash || '0x_message_hash',
-          status: 'completed'
+          burnTxHash: payload.values.txHash || '',
+          status: 'attesting',
         }
         CCTPBridgeService.saveTransfer(updated)
-        
-        setStep('done')
-        setProgress(100)
-        addLog('USDC successfully minted on destination chain (Arc Testnet)!')
-        toast.success(`Cross-chain CCTP bridging of ${amount} USDC complete!`)
-      } else {
-        // HIGH-FIDELITY INTERACTIVE SANDBOX AND RECOVERY SIMULATION
-        addLog('API key absent. Launching visual CCTP simulation on Base/Sepolia testnets...')
-        
-        // Step 1: Approving spend limit
-        setStep('approving')
-        setProgress(10)
-        addLog(`[CCTP TokenMessenger] request: approve spender ${sourceConfig.tokenMessengerAddress}`)
-        await new Promise(r => setTimeout(r, 2000))
-        
-        setProgress(30)
-        addLog('ERC-20 spender approval TX confirmed on source chain.')
-
-        // Step 2: Burning on source chain
-        setStep('burning')
-        addLog(`[CCTP Burn] calling depositForBurn(${parseUnits(amount, USDC_DECIMALS)}, ${destConfig.domainId}, ${userAddress})`)
-        await new Promise(r => setTimeout(r, 2200))
-        
-        const mockBurnHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('')
-        const mockMessageHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('')
-        
-        // Update local cache with Burn transaction hashes to support recovery testing
-        const burnUpdated: CachedTransfer = {
-          ...initialTransfer,
-          burnTxHash: mockBurnHash,
-          messageHash: mockMessageHash,
-          status: 'attesting'
-        }
-        CCTPBridgeService.saveTransfer(burnUpdated)
         setCachedTransfers(CCTPBridgeService.getCachedTransfers())
+      })
 
-        setProgress(50)
-        addLog(`USDC Burn Confirmed! Tx: ${mockBurnHash.slice(0, 16)}...`)
-        addLog(`Message Hash emitted by transmitter: ${mockMessageHash.slice(0, 16)}...`)
-
-        // Step 3: Polling Iris Attestation
+      kit.on('bridge.fetchAttestation', (payload) => {
         setStep('attesting')
-        addLog('Polling Circle Iris Attestation sandbox api...')
-        await new Promise(r => setTimeout(r, 3500))
-        
-        const attestationSig = CCTPBridgeService.simulateRecoveredAttestation(mockMessageHash)
-        const attestUpdated: CachedTransfer = {
-          ...burnUpdated,
-          attestationSignature: attestationSig,
-          status: 'minting'
+        setProgress(70)
+        if (payload.values.state === 'success') {
+          addLog(`Circle CCTP Attestation signature retrieved successfully!`)
+        } else {
+          addLog(`Polling Circle Iris Attestation... (Status: ${payload.values.state})`)
         }
-        CCTPBridgeService.saveTransfer(attestUpdated)
-        setCachedTransfers(CCTPBridgeService.getCachedTransfers())
+      })
 
-        setProgress(75)
-        addLog(`Circle attestation retrieved: ${attestationSig.slice(0, 20)}...`)
-
-        // Step 4: Minting on Arc Testnet
+      kit.on('bridge.mint', (payload) => {
         setStep('minting')
-        addLog(`[CCTP Destination] calling receiveMessage(mockMessageBytes, ${attestationSig.slice(0, 12)}...)`)
-        await new Promise(r => setTimeout(r, 1800))
-        
-        const finalUpdated: CachedTransfer = {
-          ...attestUpdated,
-          status: 'completed'
-        }
-        CCTPBridgeService.saveTransfer(finalUpdated)
-        setCachedTransfers(CCTPBridgeService.getCachedTransfers())
+        setProgress(85)
+        addLog(`Minting transaction submitted to Arc Testnet: ${payload.values.txHash}`)
+      })
 
-        setProgress(100)
-        setStep('done')
-        addLog(`Minting Complete! Recipient ${userAddress} received ${amount} USDC.`)
-        addLog('Destination transaction explorer: https://explorer.testnet.arc.network')
-        
-        toast.success(`Bridged ${amount} USDC to Arc Testnet successfully!`)
+      setStep('approving')
+      setProgress(5)
+      addLog(`Initiating TokenMessenger allowance approval for ${amount} USDC...`)
+
+      // Real cross-chain bridge execution
+      // @ts-ignore
+      const result = await kit.bridge({
+        from: { adapter, chain: sourceChain as any },
+        to: { adapter, chain: 'Arc_Testnet' },
+        amount: amount,
+      })
+
+      console.log('App Kit bridge transaction resolved:', result)
+      
+      // Cache transaction result data
+      const updated: CachedTransfer = {
+        ...initialTransfer,
+        burnTxHash: result.steps?.find(s => s.name === 'burn')?.txHash || '',
+        messageHash: (result as any)?.messageHash || '',
+        status: 'completed'
       }
+      CCTPBridgeService.saveTransfer(updated)
+      
+      setStep('done')
+      setProgress(100)
+      addLog('USDC successfully minted on destination chain (Arc Testnet)!')
+      toast.success(`Cross-chain CCTP bridging of ${amount} USDC complete!`)
     } catch (err: any) {
       console.error('App Kit bridge error:', err)
       setStep('error')
@@ -193,7 +153,7 @@ export default function BridgeView() {
     }
   }
 
-  // Automatic CCTP Error Recovery Resumer
+  // Automatic CCTP Error Recovery Resumer using App Kit retry API
   const handleResumeTransfer = async (tx: CachedTransfer) => {
     if (!walletClient) return toast.error('Connect wallet to resume CCTP transaction')
     setResumingId(tx.id)
@@ -205,28 +165,86 @@ export default function BridgeView() {
     addLog(`Cached Burn Tx: ${tx.burnTxHash.slice(0, 16)}...`)
 
     try {
-      let currentSig = tx.attestationSignature
-      setProgress(50)
+      const appKitModule = await import('@circle-fin/app-kit')
+      const adapterModule = await import('@circle-fin/adapter-viem-v2')
+      
+      const provider = typeof window !== 'undefined' ? (window as any).ethereum : null
+      if (!provider) throw new Error('EIP-1193 provider not found')
 
-      if (!currentSig) {
-        setStep('attesting')
-        addLog('Resuming attestation polling from cached message hash...')
-        
-        // Wait 3 seconds to simulate IRIS polling lookup on mock recovery
-        await new Promise(r => setTimeout(r, 3000))
-        currentSig = CCTPBridgeService.simulateRecoveredAttestation(tx.messageHash)
-        
-        tx.attestationSignature = currentSig
-        tx.status = 'minting'
-        CCTPBridgeService.saveTransfer(tx)
-        setCachedTransfers(CCTPBridgeService.getCachedTransfers())
-        addLog(`Circle attestation signature generated: ${currentSig.slice(0, 20)}...`)
+      const adapter = await adapterModule.createViemAdapterFromProvider({ provider })
+      const kit = new appKitModule.AppKit()
+
+      // Reconstruct the bridging result state object for the SDK to retry
+      const mockResult: any = {
+        amount: tx.amount,
+        token: 'USDC',
+        state: 'error',
+        provider: 'CCTPV2BridgingProvider',
+        config: {
+          transferSpeed: 'FAST'
+        },
+        source: {
+          address: userAddress,
+          chain: {
+            type: 'evm',
+            chain: tx.sourceChain,
+          }
+        },
+        destination: {
+          address: userAddress,
+          chain: {
+            type: 'evm',
+            chain: 'Arc_Testnet',
+          }
+        },
+        steps: [
+          {
+            name: 'approve',
+            state: 'success'
+          },
+          {
+            name: 'burn',
+            state: 'success',
+            txHash: tx.burnTxHash
+          },
+          {
+            name: 'fetchAttestation',
+            state: tx.attestationSignature ? 'success' : 'error',
+            data: tx.attestationSignature ? { attestation: tx.attestationSignature } : undefined
+          },
+          {
+            name: 'mint',
+            state: 'idle'
+          }
+        ]
       }
 
-      setStep('minting')
-      setProgress(75)
-      addLog(`Submitting receiveMessage() signature proof to Arc Transmitter contract...`)
-      await new Promise(r => setTimeout(r, 2000))
+      kit.on('bridge.fetchAttestation', (payload) => {
+        setStep('attesting')
+        setProgress(70)
+        if (payload.values.state === 'success') {
+          addLog(`Circle Iris Attestation retrieved successfully!`)
+        } else {
+          addLog(`Polling Circle Iris Attestation signature... (Status: ${payload.values.state})`)
+        }
+      })
+
+      kit.on('bridge.mint', (payload) => {
+        setStep('minting')
+        setProgress(85)
+        addLog(`Minting transaction submitted to Arc Testnet: ${payload.values.txHash}`)
+      })
+
+      setStep('attesting')
+      setProgress(50)
+      addLog('Re-initializing CCTP resumption pipeline...')
+
+      const retryResult = await (kit as any).retry(mockResult, {
+        from: adapter,
+        to: adapter
+      })
+
+      console.log('App Kit bridge retry transaction resolved:', retryResult)
 
       tx.status = 'completed'
       CCTPBridgeService.saveTransfer(tx)

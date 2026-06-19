@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useUnifiedAccount } from '@/lib/web3-provider'
-import { Mail, KeyRound, ShieldAlert, CheckCircle, ShieldCheck, Settings, LogOut, Copy, Check, Info } from 'lucide-react'
+import { Mail, ShieldAlert, CheckCircle, ShieldCheck, Settings, LogOut, Copy, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { truncateAddress, getExplorerAddressLink } from '@/lib/utils'
 
@@ -10,23 +10,41 @@ export default function EmbeddedAuth() {
   const { isConnected, address, circleEmail, providerType, loginWithCircle, logout } = useUnifiedAccount()
   
   const [email, setEmail] = useState('')
-  const [otp, setOtp] = useState('')
-  const [pin, setPin] = useState('')
-  const [confirmPin, setConfirmPin] = useState('')
-  
-  const [step, setStep] = useState<'email' | 'otp' | 'pin_setup' | 'pin_confirm' | 'success'>('email')
+  const [step, setStep] = useState<'email' | 'pin_challenge' | 'success'>('email')
   const [isLoading, setIsLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
+  const sdkRef = useRef<any>(null)
+
   // Temporary session details received from backend during onboarding
   const [tempSession, setTempSession] = useState<{
     address: string
-    challengeId: string
+    challengeId: string | null
     userToken: string
+    encryptionKey: string
   } | null>(null)
 
-  // 1. Submit email to trigger OTP code
+  // Initialize Circle W3S Web SDK on mount
+  useEffect(() => {
+    const initSdk = async () => {
+      try {
+        const { W3SSdk } = await import('@circle-fin/w3s-pw-web-sdk')
+        const appId = process.env.NEXT_PUBLIC_CIRCLE_APP_ID || '6f36533e-751d-5a53-a2a7-d7c587a77a08'
+        const sdk = new W3SSdk({ appSettings: { appId } })
+        sdkRef.current = sdk
+
+        // Mandatory Device ID registration for iframe session mapping
+        const deviceId = await sdk.getDeviceId()
+        console.log('[Circle Web SDK] Device ID initialized:', deviceId)
+      } catch (err) {
+        console.error('[Circle Web SDK] Failed to initialize Web SDK:', err)
+      }
+    }
+    initSdk()
+  }, [])
+
+  // 1. Submit email to register/login user
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email || !email.includes('@')) {
@@ -34,23 +52,8 @@ export default function EmbeddedAuth() {
     }
 
     setIsLoading(true)
-    toast.info('Sending verification code to your email...', { duration: 1500 })
+    toast.info('Connecting to Circle W3S network...', { duration: 1500 })
 
-    setTimeout(() => {
-      setIsLoading(false)
-      setStep('otp')
-      toast.success('OTP sent successfully! Enter code 123456 to verify.')
-    }, 1200)
-  }
-
-  // 2. Verify OTP code and request backend wallet setup
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (otp !== '123456') {
-      return toast.error('Invalid OTP verification code. Try 123456')
-    }
-
-    setIsLoading(true)
     try {
       const res = await fetch('/api/wallets/user/init', {
         method: 'POST',
@@ -62,47 +65,77 @@ export default function EmbeddedAuth() {
       if (data.error) throw new Error(data.error)
 
       setTempSession({
-        address: data.address,
+        address: data.address || '',
         challengeId: data.challengeId,
-        userToken: data.userToken
+        userToken: data.userToken,
+        encryptionKey: data.encryptionKey
       })
 
       setIsLoading(false)
-      setStep('pin_setup')
-      toast.success('Email verified! Secure your non-custodial wallet.')
+
+      if (data.challengeId) {
+        // New user: must setup secure non-custodial PIN
+        setStep('pin_challenge')
+        toast.success('Onboarding session initialized! Secure your wallet.')
+      } else {
+        // Existing user: logged in immediately
+        loginWithCircle(email, data.address as `0x${string}`)
+        setStep('success')
+        toast.success('Welcome back! SME wallet session restored.')
+      }
     } catch (err: any) {
       setIsLoading(false)
       toast.error('Failed to initialize session', { description: err.message })
     }
   }
 
-  // 3. User passcode/PIN configuration
-  const handlePinSetup = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (pin.length !== 6 || isNaN(Number(pin))) {
-      return toast.error('PIN must be a 6-digit numeric code')
-    }
-    setStep('pin_confirm')
-  }
-
-  // 4. Confirm PIN and activate wallet
-  const handlePinConfirm = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (pin !== confirmPin) {
-      setConfirmPin('')
-      setStep('pin_setup')
-      return toast.error('PINs do not match. Please try again.')
+  // 2. Execute secure PIN setup challenge via Circle's overlay UI
+  const handleExecutePinChallenge = () => {
+    const sdk = sdkRef.current
+    if (!sdk || !tempSession?.challengeId || !tempSession?.userToken || !tempSession?.encryptionKey) {
+      return toast.error('Circle SDK is not ready or missing session credentials.')
     }
 
     setIsLoading(true)
-    setTimeout(() => {
-      setIsLoading(false)
-      if (tempSession) {
-        loginWithCircle(email, tempSession.address as `0x${string}`)
-        setStep('success')
-        toast.success('Embedded non-custodial wallet instantiated on Arc!')
+    
+    sdk.setAuthentication({
+      userToken: tempSession.userToken,
+      encryptionKey: tempSession.encryptionKey,
+    })
+
+    sdk.execute(tempSession.challengeId, async (error: any, result: any) => {
+      if (error) {
+        setIsLoading(false)
+        console.error('[Circle Web SDK] Execute error:', error)
+        toast.error('Challenge failed: ' + (error.message || 'Process cancelled by user.'))
+        return
       }
-    }, 1500)
+
+      console.log('[Circle Web SDK] Challenge executed successfully:', result)
+      toast.info('Verification successful. Retrieving wallet address...')
+
+      // Query the backend to retrieve the newly generated wallet address
+      try {
+        const res = await fetch('/api/wallets/user/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, fetchAddressOnly: true, userToken: tempSession.userToken })
+        })
+        const data = await res.json()
+        setIsLoading(false)
+
+        if (data.error || !data.address) {
+          throw new Error(data.error || 'Address not populated yet.')
+        }
+
+        loginWithCircle(email, data.address as `0x${string}`)
+        setStep('success')
+        toast.success('Non-custodial smart wallet successfully instantiated on Arc!')
+      } catch (err: any) {
+        setIsLoading(false)
+        toast.error('Failed to fetch registered wallet address', { description: err.message })
+      }
+    })
   }
 
   const handleCopy = () => {
@@ -137,97 +170,30 @@ export default function EmbeddedAuth() {
               />
             </div>
             <button type="submit" className="btn btn-primary" style={{ width: '100%', display: 'flex', justifyContent: 'center' }} disabled={isLoading}>
-              {isLoading ? 'Sending OTP...' : 'Send Verification OTP'}
+              {isLoading ? 'Connecting...' : 'Proceed'}
             </button>
           </form>
         )
 
-      case 'otp':
+      case 'pin_challenge':
         return (
-          <form onSubmit={handleVerifyOtp} className="form-group animate-in">
-            <h3 style={{ margin: '0 0 8px 0', fontSize: 16, color: 'var(--ff-text)' }}>Enter Verification Code</h3>
-            <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'var(--ff-text-muted)', lineHeight: 1.4 }}>
-              A 6-digit OTP code has been dispatched to <strong>{email}</strong>. Enter <strong>123456</strong> to proceed.
-            </p>
-            <div style={{ position: 'relative', marginBottom: 16 }}>
-              <KeyRound size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ff-text-muted)' }} />
-              <input
-                type="text"
-                className="form-input"
-                maxLength={6}
-                placeholder="0 0 0 0 0 0"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                disabled={isLoading}
-                style={{ paddingLeft: 38, letterSpacing: 4, textAlign: 'left', fontWeight: 700 }}
-                required
-              />
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setStep('email')}>
-                Back
-              </button>
-              <button type="submit" className="btn btn-primary" style={{ flex: 2, display: 'flex', justifyContent: 'center' }} disabled={isLoading}>
-                {isLoading ? 'Verifying...' : 'Verify OTP'}
-              </button>
-            </div>
-          </form>
-        )
-
-      case 'pin_setup':
-        return (
-          <form onSubmit={handlePinSetup} className="form-group animate-in">
+          <div className="form-group animate-in">
             <h3 style={{ margin: '0 0 8px 0', fontSize: 16, color: 'var(--ff-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
               <ShieldAlert size={18} color="var(--ff-warning)" />
               Setup Secure PIN
             </h3>
             <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'var(--ff-text-muted)', lineHeight: 1.4 }}>
-              Create a custom 6-digit backup PIN to encrypt your non-custodial keys. FactorFi cannot recover this PIN.
+              To ensure full non-custodial custody, Circle will display a secure overlay for you to set your wallet PIN and security questions.
             </p>
-            <div style={{ position: 'relative', marginBottom: 16 }}>
-              <ShieldAlert size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ff-text-muted)' }} />
-              <input
-                type="password"
-                className="form-input"
-                maxLength={6}
-                placeholder="******"
-                value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-                style={{ paddingLeft: 38, letterSpacing: 6, fontWeight: 700 }}
-                required
-              />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setStep('email')} disabled={isLoading}>
+                Back
+              </button>
+              <button type="button" className="btn btn-primary" style={{ flex: 2, display: 'flex', justifyContent: 'center' }} onClick={handleExecutePinChallenge} disabled={isLoading}>
+                {isLoading ? 'Opening Dialog...' : 'Open PIN Dialog'}
+              </button>
             </div>
-            <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-              Continue
-            </button>
-          </form>
-        )
-
-      case 'pin_confirm':
-        return (
-          <form onSubmit={handlePinConfirm} className="form-group animate-in">
-            <h3 style={{ margin: '0 0 8px 0', fontSize: 16, color: 'var(--ff-text)' }}>Confirm Your PIN</h3>
-            <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'var(--ff-text-muted)', lineHeight: 1.4 }}>
-              Re-enter the 6-digit security PIN to finalize wallet encryption.
-            </p>
-            <div style={{ position: 'relative', marginBottom: 16 }}>
-              <ShieldCheck size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--ff-text-muted)' }} />
-              <input
-                type="password"
-                className="form-input"
-                maxLength={6}
-                placeholder="******"
-                value={confirmPin}
-                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                disabled={isLoading}
-                style={{ paddingLeft: 38, letterSpacing: 6, fontWeight: 700 }}
-                required
-              />
-            </div>
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', display: 'flex', justifyContent: 'center' }} disabled={isLoading}>
-              {isLoading ? 'Creating Wallet...' : 'Instantiate Embedded Wallet'}
-            </button>
-          </form>
+          </div>
         )
 
       case 'success':
@@ -248,7 +214,7 @@ export default function EmbeddedAuth() {
                 <span style={{ fontSize: 11, fontFamily: 'var(--ff-mono)' }}>{truncateAddress(address!)}</span>
               </div>
             </div>
-            <button type="button" className="btn btn-primary" style={{ width: '100%' }} onClick={() => setStep('email')}>
+            <button type="button" className="btn btn-primary" style={{ width: '100%' }} onClick={() => setShowSettings(false)}>
               Explore Portal
             </button>
           </div>

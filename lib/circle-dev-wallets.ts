@@ -1,9 +1,12 @@
-import { createWalletClient, createPublicClient, http } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
-import { arcTestnet } from './arc-config'
+import { initiateDeveloperControlledWalletsClient, Blockchain } from '@circle-fin/developer-controlled-wallets'
 import crypto from 'crypto'
 
-// Memory-based serialization lock to prevent parallel nonce collisions
+const client = initiateDeveloperControlledWalletsClient({
+  apiKey: process.env.CIRCLE_API_KEY!,
+  entitySecret: process.env.CIRCLE_ENTITY_SECRET!,
+})
+
+// Memory-based serialization lock to prevent parallel nonce collisions (not strictly needed with Circle API but kept for safety)
 class TransactionQueue {
   private queue: Promise<any> = Promise.resolve()
 
@@ -21,8 +24,6 @@ export class CircleDevWalletsManager {
   private secretKey: string
 
   private constructor() {
-    // Standard secure initialization using AES-256 decrypted Entity Secret
-    // Uses the server's private key as base salt for decryption in test runner
     const salt = process.env.PRIVATE_KEY || 'factorfi-programmatic-vault-secret-salt-key-999'
     this.secretKey = crypto.createHash('sha256').update(salt).digest('hex')
   }
@@ -35,101 +36,146 @@ export class CircleDevWalletsManager {
   }
 
   /**
-   * Safe AES-256 decryption utility for handling corporate secret files/keys
+   * Dummy AES-256 decryption utility for compatibility
    */
   public decryptSecret(encryptedHex: string): string {
-    try {
-      const textParts = encryptedHex.split(':')
-      const iv = Buffer.from(textParts.shift() || '', 'hex')
-      const encryptedText = Buffer.from(textParts.join(':'), 'hex')
-      const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(this.secretKey, 'hex'), iv)
-      let decrypted = decipher.update(encryptedText)
-      decrypted = Buffer.concat([decrypted, decipher.final()])
-      return decrypted.toString()
-    } catch (e) {
-      // Fallback for raw unencrypted strings in test/development scenarios
-      return encryptedHex
-    }
+    return encryptedHex
   }
 
   /**
-   * Safe AES-256 encryption utility for initializing entity secret vaults
+   * Dummy AES-256 encryption utility for compatibility
    */
   public encryptSecret(text: string): string {
-    const iv = crypto.randomBytes(16)
-    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(this.secretKey, 'hex'), iv)
-    let encrypted = cipher.update(text)
-    encrypted = Buffer.concat([encrypted, cipher.final()])
-    return iv.toString('hex') + ':' + encrypted.toString('hex')
+    return text
   }
 
   /**
-   * Generates a secure programmatic Developer-Controlled wallet for an Anchor
+   * Generates a real Developer-Controlled wallet for an Anchor
    */
   public async createProgrammaticWallet(companyName: string) {
-    // In Circle Developer-Controlled Wallets, each wallet is generated programmatically
-    // and mapped to a developer-managed private key representing the enterprise anchor.
-    // Generates a secure, deterministic keypair representing the corporate vault.
-    const entropy = crypto.createHash('sha256').update(companyName + Date.now().toString()).digest('hex')
-    const account = privateKeyToAccount(`0x${entropy}`)
+    console.log(`[Circle Dev Wallet] Creating real programmatic wallet set for: ${companyName}`)
     
+    // 1. Create a Wallet Set
+    const walletSetResponse = await client.createWalletSet({
+      name: `Anchor - ${companyName} - ${Date.now()}`,
+      idempotencyKey: crypto.randomUUID()
+    })
+    const walletSetId = walletSetResponse.data?.walletSet?.id
+    if (!walletSetId) {
+      throw new Error(`Failed to create Wallet Set: ${JSON.stringify(walletSetResponse)}`)
+    }
+
+    console.log(`[Circle Dev Wallet] Wallet Set created: ${walletSetId}. Deriving EOA wallet...`)
+
+    // 2. Derive the EOA wallet on Arc Testnet
+    const walletsResponse = await client.createWallets({
+      accountType: 'EOA',
+      blockchains: [Blockchain.ArcTestnet],
+      count: 1,
+      walletSetId: walletSetId,
+      metadata: [{
+        name: companyName,
+        refId: crypto.randomUUID().slice(0, 32)
+      }],
+      idempotencyKey: crypto.randomUUID()
+    })
+    
+    const wallet = walletsResponse.data?.wallets?.[0]
+    if (!wallet) {
+      throw new Error(`Failed to derive wallet: ${JSON.stringify(walletsResponse)}`)
+    }
+
+    console.log(`[Circle Dev Wallet] Wallet created successfully. ID: ${wallet.id}, Address: ${wallet.address}`)
+
     return {
-      walletId: `dev_wal_${crypto.randomBytes(8).toString('hex')}`,
-      address: account.address,
-      encryptedKey: this.encryptSecret(entropy),
+      walletId: wallet.id,
+      address: wallet.address,
+      encryptedKey: wallet.id, // Map encryptedKey to walletId for compatibility
       companyName,
       createdAt: new Date().toISOString()
     }
   }
 
   /**
-   * Executes a programmatic transaction through the transaction queue (preventing nonce collisions)
+   * Polls the transaction until it reaches a terminal state
+   */
+  public async waitForTransaction(transactionId: string): Promise<any> {
+    const maxRetries = 40
+    const delay = 1000
+    for (let i = 0; i < maxRetries; i++) {
+      const txResponse = await client.getTransaction({ id: transactionId })
+      const status = txResponse.data?.transaction?.state
+      console.log(`[Circle Dev Wallet] Polling transaction ${transactionId}: state is ${status}`)
+      if (status === 'COMPLETE') {
+        return txResponse.data?.transaction
+      }
+      if (status === 'FAILED' || status === 'DENIED' || status === 'CANCELLED') {
+        throw new Error(`Transaction ${transactionId} finished with state: ${status}. Error details: ${JSON.stringify(txResponse.data?.transaction?.errorReason)}`)
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+    throw new Error(`Transaction ${transactionId} timed out after polling for 40 seconds`)
+  }
+
+  /**
+   * Executes a contract execution transaction via the Circle Developer Controlled SDK
    */
   public async executeTransaction(
-    encryptedPrivateKey: string,
+    walletId: string,
     targetAddress: `0x${string}`,
     abi: any,
     functionName: string,
     args: any[]
   ): Promise<`0x${string}`> {
     return transactionQueue.enqueue(async () => {
-      // Decrypt private key securely using Entity Secret mechanics
-      const rawPrivateKey = this.decryptSecret(encryptedPrivateKey)
-      const account = privateKeyToAccount(`0x${rawPrivateKey.replace(/^0x/, '')}`)
+      console.log(`[Circle Dev Wallet] Preparing contract execution on: ${targetAddress}, Function: ${functionName}`)
       
-      const publicClient = createPublicClient({
-        chain: arcTestnet,
-        transport: http()
+      // Auto-extract ABI function signature
+      const abiItem = abi.find((x: any) => x.name === functionName && x.type === 'function')
+      if (!abiItem) {
+        throw new Error(`Function ${functionName} not found in ABI`)
+      }
+
+      const types = abiItem.inputs.map((i: any) => i.type).join(',')
+      const abiFunctionSignature = `${functionName}(${types})`
+
+      // Convert arguments to string values
+      const abiParameters = args.map((arg: any) => {
+        if (typeof arg === 'bigint') {
+          return arg.toString()
+        }
+        if (Array.isArray(arg)) {
+          return arg.map((a: any) => typeof a === 'bigint' ? a.toString() : a)
+        }
+        return arg
       })
 
-      const walletClient = createWalletClient({
-        account,
-        chain: arcTestnet,
-        transport: http()
+      console.log(`[Circle Dev Wallet] Executing signature: ${abiFunctionSignature} with params:`, abiParameters)
+
+      const executionResponse = await client.createContractExecutionTransaction({
+        walletId,
+        contractAddress: targetAddress,
+        abiFunctionSignature,
+        abiParameters,
+        fee: {
+          type: 'level',
+          config: { feeLevel: 'MEDIUM' }
+        },
+        refId: crypto.randomUUID(),
+        idempotencyKey: crypto.randomUUID()
       })
 
-      // Query current exact nonce including pending transactions
-      const nonce = await publicClient.getTransactionCount({
-        address: account.address,
-        blockTag: 'pending'
-      })
+      const transactionId = executionResponse.data?.id
+      if (!transactionId) {
+        throw new Error(`Failed to execute transaction: ${JSON.stringify(executionResponse)}`)
+      }
 
-      console.log(`[Queue Execution] Sending programmatic tx. Wallet: ${account.address}, Nonce: ${nonce}`)
+      const tx = await this.waitForTransaction(transactionId)
+      if (!tx?.txHash) {
+        throw new Error(`Transaction completed but txHash is missing`)
+      }
 
-      // Execute write contract directly utilizing the serialized nonce
-      const txHash = await walletClient.writeContract({
-        address: targetAddress,
-        abi,
-        functionName,
-        args,
-        nonce
-      })
-
-      // Wait for 1 transaction receipt confirmation to verify on-chain settlement before releasing queue lock
-      await publicClient.waitForTransactionReceipt({ hash: txHash })
-      console.log(`[Queue Execution] Programmatic tx confirmed: ${txHash}`)
-
-      return txHash
+      return tx.txHash as `0x${string}`
     })
   }
 }

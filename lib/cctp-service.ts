@@ -122,10 +122,4 @@ export class CCTPBridgeService {
 
     throw new Error('Circle CCTP Attestation timeout. Try resuming again later.')
   }
-
-  // 3. Mock High-Fidelity Attestation recovery generator
-  public static simulateRecoveredAttestation(messageHash: string): string {
-    // Deterministic attestation payload matching message hash to bypass sandbox issues
-    return '0x' + keccak256(toHex(messageHash)).slice(2) + 'c09b83b1029c29d01243ab98d1a10c9a29188e738c82a17f398f6e7f8e02fa9ada85f0d41dc57c37a93aa2ce818c39d8e788b71d9a57be3d8f8d6896'
-  }
 }
