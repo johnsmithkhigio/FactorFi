@@ -72,7 +72,7 @@ export default function LandingView({ onLaunchApp }: LandingViewProps) {
       <section style={{ textAlign: 'center', padding: '48px 0', position: 'relative' }}>
         <div style={{ 
           position: 'absolute', top: '-10%', left: '50%', transform: 'translateX(-50%)',
-          width: '80%', height: '300px', background: 'radial-gradient(circle, rgba(79, 70, 229, 0.15) 0%, transparent 60%)',
+          width: '80%', height: '300px', background: 'radial-gradient(circle, rgba(56, 189, 248, 0.12) 0%, transparent 60%)',
           zIndex: -1, pointerEvents: 'none'
         }} />
 
