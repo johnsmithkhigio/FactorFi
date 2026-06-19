@@ -124,6 +124,20 @@ export default function FactorFiApp() {
         </div>
       </main>
 
+      {/* Mobile Bottom Navigation Bar */}
+      <nav className="mobile-bottom-nav">
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={item.id}
+            className={`mobile-nav-tab ${activeView === item.id ? 'active' : ''}`}
+            onClick={() => setActiveView(item.id)}
+          >
+            {item.icon}
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
+
       {/* Circle Compliance Onboarding Modal */}
       {isConnected && activeView !== 'landing' && isCompliant === false && (
         <ComplianceModal onVerificationComplete={refetchCompliance} />

@@ -628,62 +628,64 @@ export default function DashboardView() {
             </div>
             
             {invoices.length > 0 ? (
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Supplier</th>
-                    <th>Anchor</th>
-                    <th>Stablecoin</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Discount</th>
-                    <th>Due Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.map((inv: any) => {
-                    const tokenConfig = getTokenByAddress(inv.token)
-                    return (
-                      <tr key={Number(inv.id)}>
-                        <td style={{ fontWeight: 600 }}>#{Number(inv.id)}</td>
-                        <td>
-                          <a href={getExplorerAddressLink(inv.supplier)} target="_blank" rel="noopener noreferrer" className="link-explorer">
-                            {truncateAddress(inv.supplier)}
-                          </a>
-                        </td>
-                        <td>
-                          <a href={getExplorerAddressLink(inv.anchor)} target="_blank" rel="noopener noreferrer" className="link-explorer">
-                            {truncateAddress(inv.anchor)}
-                          </a>
-                        </td>
-                        <td>
-                          <span className={`badge`} style={{
-                            background: tokenConfig?.symbol === 'EURC' ? 'var(--ff-violet-subtle)' : 'var(--ff-primary-subtle)',
-                            color: tokenConfig?.symbol === 'EURC' ? 'var(--ff-violet)' : 'var(--ff-primary)'
-                          }}>
-                            {tokenConfig?.symbol || 'USDC'}
-                          </span>
-                        </td>
-                        <td className="amount-usdc" style={{ fontFamily: 'var(--ff-mono)' }}>
-                          {formatTokenAmount(inv.amount, inv.token)}
-                        </td>
-                        <td>
-                          <span className={`badge badge-${(STATUS_LABELS[Number(inv.status)] || 'submitted').toLowerCase()}`}>
-                            {STATUS_LABELS[Number(inv.status)] || 'Unknown'}
-                          </span>
-                        </td>
-                        <td>{Number(inv.discountBps) > 0 ? `${(Number(inv.discountBps) / 100).toFixed(1)}%` : '—'}</td>
-                        <td style={{ color: 'var(--ff-text-secondary)' }}>
-                          {Number(inv.dueDate) > 0
-                            ? new Date(Number(inv.dueDate) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                            : '—'}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+              <div className="table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Supplier</th>
+                      <th>Anchor</th>
+                      <th>Stablecoin</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                      <th>Discount</th>
+                      <th>Due Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.map((inv: any) => {
+                      const tokenConfig = getTokenByAddress(inv.token)
+                      return (
+                        <tr key={Number(inv.id)}>
+                          <td style={{ fontWeight: 600 }}>#{Number(inv.id)}</td>
+                          <td>
+                            <a href={getExplorerAddressLink(inv.supplier)} target="_blank" rel="noopener noreferrer" className="link-explorer">
+                              {truncateAddress(inv.supplier)}
+                            </a>
+                          </td>
+                          <td>
+                            <a href={getExplorerAddressLink(inv.anchor)} target="_blank" rel="noopener noreferrer" className="link-explorer">
+                              {truncateAddress(inv.anchor)}
+                            </a>
+                          </td>
+                          <td>
+                            <span className={`badge`} style={{
+                              background: tokenConfig?.symbol === 'EURC' ? 'var(--ff-violet-subtle)' : 'var(--ff-primary-subtle)',
+                              color: tokenConfig?.symbol === 'EURC' ? 'var(--ff-violet)' : 'var(--ff-primary)'
+                            }}>
+                              {tokenConfig?.symbol || 'USDC'}
+                            </span>
+                          </td>
+                          <td className="amount-usdc" style={{ fontFamily: 'var(--ff-mono)' }}>
+                            {formatTokenAmount(inv.amount, inv.token)}
+                          </td>
+                          <td>
+                            <span className={`badge badge-${(STATUS_LABELS[Number(inv.status)] || 'submitted').toLowerCase()}`}>
+                              {STATUS_LABELS[Number(inv.status)] || 'Unknown'}
+                            </span>
+                          </td>
+                          <td>{Number(inv.discountBps) > 0 ? `${(Number(inv.discountBps) / 100).toFixed(1)}%` : '—'}</td>
+                          <td style={{ color: 'var(--ff-text-secondary)' }}>
+                            {Number(inv.dueDate) > 0
+                              ? new Date(Number(inv.dueDate) * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                              : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <div className="empty-state">
                 <FileText size={36} />
@@ -803,36 +805,38 @@ export default function DashboardView() {
               <span className="card-title">Real-Time Routing & Settlements</span>
             </div>
             {revenueRecords.length > 0 ? (
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Invoice ID</th>
-                    <th>Total Fee</th>
-                    <th>Treasury Payout</th>
-                    <th>Underwriter Payout</th>
-                    <th>Reserve Pool Payout</th>
-                    <th>Execution</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {revenueRecords.map((rec) => (
-                    <tr key={rec.invoiceId}>
-                      <td style={{ fontWeight: 600 }}>#{rec.invoiceId}</td>
-                      <td className="amount-usdc" style={{ color: 'var(--ff-primary)' }}>
-                        {formatTokenAmount(rec.totalFee, rec.token)}
-                      </td>
-                      <td>{formatTokenAmount(rec.treasury, rec.token)}</td>
-                      <td>{formatTokenAmount(rec.underwriter, rec.token)}</td>
-                      <td>{formatTokenAmount(rec.reserve, rec.token)}</td>
-                      <td>
-                        <span className="badge badge-approved" style={{ fontSize: 10, padding: '2px 8px', letterSpacing: 0.5 }}>
-                          INSTANT
-                        </span>
-                      </td>
+              <div className="table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Invoice ID</th>
+                      <th>Total Fee</th>
+                      <th>Treasury Payout</th>
+                      <th>Underwriter Payout</th>
+                      <th>Reserve Pool Payout</th>
+                      <th>Execution</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {revenueRecords.map((rec) => (
+                      <tr key={rec.invoiceId}>
+                        <td style={{ fontWeight: 600 }}>#{rec.invoiceId}</td>
+                        <td className="amount-usdc" style={{ color: 'var(--ff-primary)' }}>
+                          {formatTokenAmount(rec.totalFee, rec.token)}
+                        </td>
+                        <td>{formatTokenAmount(rec.treasury, rec.token)}</td>
+                        <td>{formatTokenAmount(rec.underwriter, rec.token)}</td>
+                        <td>{formatTokenAmount(rec.reserve, rec.token)}</td>
+                        <td>
+                          <span className="badge badge-approved" style={{ fontSize: 10, padding: '2px 8px', letterSpacing: 0.5 }}>
+                            INSTANT
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <div className="empty-state" style={{ padding: '36px 0' }}>
                 <Clock size={36} color="var(--ff-text-muted)" style={{ marginBottom: 8 }} />

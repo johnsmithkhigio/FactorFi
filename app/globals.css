@@ -871,3 +871,88 @@ select.form-input {
   border-radius: var(--ff-radius) !important;
   border-color: var(--ff-border) !important;
 }
+
+/* ========== RESPONSIVE NAVIGATION & TABLE UTILITIES ========== */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: rgba(7, 12, 23, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--ff-border);
+    justify-content: space-around;
+    align-items: center;
+    z-index: 99;
+    padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  }
+  
+  .mobile-nav-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--ff-text-secondary);
+    font-size: 10px;
+    font-weight: 500;
+    gap: 4px;
+    flex: 1;
+    height: 100%;
+    cursor: pointer;
+    transition: all var(--ff-transition);
+  }
+  
+  .mobile-nav-tab:hover {
+    color: var(--ff-text);
+  }
+  
+  .mobile-nav-tab.active {
+    color: var(--ff-primary);
+  }
+  
+  .mobile-nav-tab svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .main-content {
+    padding-bottom: 72px; /* Avoid overlaying content behind bottom nav bar */
+  }
+  
+  .network-badge {
+    padding: 3px 8px;
+    font-size: 10px;
+  }
+}
+
+/* Responsive Table Wrapper */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 1rem;
+}
+
+.table-container::-webkit-scrollbar {
+  height: 5px;
+}
+
+.table-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+  background: var(--ff-border-highlight);
+  border-radius: 4px;
+}
