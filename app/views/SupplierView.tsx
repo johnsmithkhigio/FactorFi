@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useWriteContract, useWaitForTransactionReceipt, useSignMessage } from 'wagmi'
 import { parseUnits } from 'viem'
-import { Send, ExternalLink, Zap, UploadCloud, BrainCircuit, CheckCircle2, FileText, CheckCircle, Clock, ShieldAlert, BadgeInfo, Wallet, PlusCircle, Database, Check } from 'lucide-react'
+import { Send, ExternalLink, Zap, UploadCloud, BrainCircuit, CheckCircle2, FileText, CheckCircle, Clock, ShieldAlert, BadgeInfo, Wallet, PlusCircle, Database, Check, Bot } from 'lucide-react'
 import { toast } from 'sonner'
 import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi, USDC_ADDRESS_ARC, usdcAbi } from '@/lib/contracts'
 import { getExplorerTxLink } from '@/lib/utils'
@@ -42,6 +42,8 @@ export default function SupplierView() {
   const [agentRunning, setAgentRunning] = useState(false)
   const [agentComplete, setAgentComplete] = useState(false)
   const [agentLogs, setAgentLogs] = useState<{step: number, message: string, status: 'running' | 'done' | 'pending'}[]>([])
+  const [reactAgentLogs, setReactAgentLogs] = useState<{timestamp: number, type: 'thought' | 'action' | 'observation' | 'output', message: string}[]>([])
+  const [vaultLiquidity, setVaultLiquidity] = useState<string>('0')
   
   // Paymaster/AA modal
   const [paymasterActive, setPaymasterActive] = useState(false)
@@ -142,6 +144,7 @@ export default function SupplierView() {
     
     setAgentRunning(true)
     setAgentComplete(false)
+    setReactAgentLogs([])
     setAgentLogs([
       { step: 1, message: 'Checking Gateway Nanopayment Balance...', status: 'running' },
       { step: 2, message: 'Negotiating x402 payment handshake...', status: 'pending' },
@@ -234,6 +237,8 @@ export default function SupplierView() {
       setConfidence(data.confidence)
       setRiskBps(data.riskMarginBps)
       setAnchorRating(data.anchorRating)
+      setReactAgentLogs(data.logs || [])
+      setVaultLiquidity(data.vaultLiquidity || '0')
 
       setAgentRunning(false)
       setAgentComplete(true)
@@ -463,6 +468,10 @@ export default function SupplierView() {
                       <td style={{ fontWeight: 700, color: 'var(--ff-success)', textAlign: 'right' }}>{anchorRating} / 1000</td>
                     </tr>
                     <tr>
+                      <td style={{ color: 'var(--ff-text-muted)', padding: '2px 0' }}>Vault Liquidity Available</td>
+                      <td style={{ fontWeight: 700, color: '#fff', textAlign: 'right' }}>{vaultLiquidity} USDC</td>
+                    </tr>
+                    <tr>
                       <td style={{ color: 'var(--ff-text-muted)', padding: '2px 0' }}>Invoice Signature</td>
                       <td style={{ fontFamily: 'var(--ff-mono)', color: 'var(--ff-primary)', textAlign: 'right' }}>
                         {underwriterSignature ? `${underwriterSignature.slice(0, 16)}...` : 'N/A'}
@@ -470,6 +479,40 @@ export default function SupplierView() {
                     </tr>
                   </tbody>
                 </table>
+
+                {/* Autonomous Agent Logs Console */}
+                <div style={{ marginTop: 6, borderTop: '1px solid var(--ff-border)', paddingTop: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: 'var(--ff-primary)', marginBottom: 8 }}>
+                    <Bot size={12} />
+                    <span>Autonomous Agent ReAct Underwriting Loop:</span>
+                  </div>
+                  <div style={{
+                    background: '#070707', border: '1px solid #141414', borderRadius: 6, padding: '8px 10px',
+                    fontFamily: 'var(--ff-mono)', fontSize: 9, display: 'flex', flexDirection: 'column', gap: 6,
+                    maxHeight: 140, overflowY: 'auto'
+                  }}>
+                    {reactAgentLogs.map((log, idx) => {
+                      let color = 'var(--ff-text-muted)'
+                      let prefix = 'THOUGHT:'
+                      if (log.type === 'action') {
+                        color = '#3b82f6'
+                        prefix = 'ACTION:'
+                      } else if (log.type === 'observation') {
+                        color = '#a855f7'
+                        prefix = 'OBSERVATION:'
+                      } else if (log.type === 'output') {
+                        color = 'var(--ff-success)'
+                        prefix = 'OUTPUT:'
+                      }
+                      return (
+                        <div key={idx} style={{ lineHeight: 1.3 }}>
+                          <span style={{ color, fontWeight: 'bold', marginRight: 6 }}>{prefix}</span>
+                          <span style={{ color: '#d1d5db' }}>{log.message}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
             ) : (
               <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--ff-text-muted)', fontSize: 12 }}>

@@ -31,7 +31,13 @@ export default function EmbeddedAuth() {
       try {
         const { W3SSdk } = await import('@circle-fin/w3s-pw-web-sdk')
         const appId = process.env.NEXT_PUBLIC_CIRCLE_APP_ID || '6f36533e-751d-5a53-a2a7-d7c587a77a08'
-        const sdk = new W3SSdk({ appSettings: { appId } })
+        const clientUrl = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_URL || 'https://modular-sdk.circle.com/v1/rpc/w3s/buidl'
+        const sdk = new W3SSdk({
+          appSettings: { appId }
+        });
+        if (clientUrl) {
+          (sdk as any).serviceUrl = clientUrl;
+        }
         sdkRef.current = sdk
 
         // Mandatory Device ID registration for iframe session mapping
