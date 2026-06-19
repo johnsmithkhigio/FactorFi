@@ -81,57 +81,30 @@ export async function POST(req: Request) {
     const parsedDetails = await UnderwriterAgent.parseInvoiceDocument(buffer, file.name)
     parsedDetails.token = token
     
-    // Fetch real credit rating from blockchain for the anchor address
-    const publicClient = createPublicClient({
-      chain: arcTestnet,
-      transport: http()
-    })
+    // Call the Autonomous ReAct Underwriter Agent
+    const { UnderwriterReActAgent } = await import('@/lib/agent-runner')
+    const agentResult = await UnderwriterReActAgent.run(parsedDetails)
 
-    let rating = 700 // Fallback default score if lookup fails or unregistered
-    try {
-      const anchorData = await publicClient.readContract({
-        address: FACTORFI_CONTRACT_ADDRESS,
-        abi: factorFiAbi,
-        functionName: 'getAnchor',
-        args: [parsedDetails.anchor as `0x${string}`]
-      }) as any
-      
-      const isRegistered = anchorData?.isRegistered ?? anchorData?.[4]
-      const creditRating = anchorData?.creditRating ?? anchorData?.[1]
-
-      if (anchorData && isRegistered) {
-        rating = Number(creditRating)
-        console.log(`[Underwrite API] Found registered anchor ${parsedDetails.anchor} on-chain with rating ${rating}`)
-      } else {
-        console.log(`[Underwrite API] Anchor ${parsedDetails.anchor} not registered on-chain. Using default fallback rating ${rating}`)
-      }
-    } catch (e) {
-      console.warn(`[Underwrite API] Failed to read on-chain anchor details, using default. Error:`, e)
-    }
-
-    const ratingDecision = UnderwriterAgent.calculateRiskMargin(rating)
-
-    if (ratingDecision.decision === 'REJECTED') {
+    if (agentResult.decision === 'REJECTED') {
       return NextResponse.json({
-        error: `Invoice underwriting rejected: debtor credit score (${rating}) is below minimum limit.`,
-        rating
+        error: `Invoice underwriting rejected: debtor credit score (${agentResult.anchorRating}) is below minimum limit.`,
+        rating: agentResult.anchorRating,
+        logs: agentResult.logs
       }, { status: 400 })
     }
 
-    // Compute and Sign Cryptographic Invoice Hash
-    const invoiceHash = UnderwriterAgent.calculateInvoiceHash(parsedDetails)
-    const signature = await UnderwriterAgent.signInvoiceHash(invoiceHash)
-
-    // Return Underwriting Result and updated Gateway balance
+    // Return Underwriting Result, ReAct log steps, and updated Gateway balance
     return NextResponse.json({
       details: parsedDetails,
-      invoiceHash,
-      signature,
-      confidence: 0.98,
-      riskMarginBps: ratingDecision.riskMarginBps,
+      invoiceHash: agentResult.invoiceHash,
+      signature: agentResult.signature,
+      confidence: 0.99,
+      riskMarginBps: agentResult.riskMarginBps,
       decision: 'APPROVED',
-      anchorRating: rating,
+      anchorRating: agentResult.anchorRating,
       newBalance: verifyResult.newBalance,
+      logs: agentResult.logs,
+      vaultLiquidity: agentResult.vaultLiquidity
     })
 
   } catch (error: any) {
