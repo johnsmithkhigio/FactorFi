@@ -819,12 +819,23 @@ select.form-input {
   }
 }
 
+.btn-text-mobile {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .navbar-nav {
     display: none;
   }
   .navbar-inner {
-    padding: 0 16px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .navbar-brand h1 {
+    font-size: 16px;
+  }
+  .network-badge {
+    display: none;
   }
   .balance-pill {
     display: none;
@@ -837,6 +848,26 @@ select.form-input {
   }
   .page-content {
     padding: 24px 16px;
+  }
+  .btn-text-desktop {
+    display: none;
+  }
+  .btn-text-mobile {
+    display: inline;
+  }
+  .navbar-right button, 
+  .navbar-right .btn,
+  .navbar-right [class*="connect"] button,
+  .navbar-right [class*="Connect"] button {
+    padding: 6px 10px !important;
+    font-size: 11.5px !important;
+    height: auto !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .brand-tag {
+    display: none;
   }
 }
 

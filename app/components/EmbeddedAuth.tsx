@@ -335,7 +335,8 @@ export default function EmbeddedAuth() {
         }}
       >
         <Mail size={14} />
-        <span>SME Web2 Onboarding</span>
+        <span className="btn-text-desktop">SME Web2 Onboarding</span>
+        <span className="btn-text-mobile">Web2 Login</span>
       </button>
 
       {/* Auth Onboarding Overlay Modal */}
