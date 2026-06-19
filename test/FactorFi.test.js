@@ -112,4 +112,76 @@ describe('FactorFi Double Factoring & AI Underwriter Signature Tests', function 
         .submitInvoice(anchor.address, amount, dueDate, description, invoiceHash, signature, await usdcMock.getAddress())
     ).to.be.revertedWith('Invalid AI Underwriter signature verification');
   });
+
+  describe('Gasless Sponsorship submitInvoiceOnBehalf Tests', function () {
+    it('Should allow owner to submit invoice on behalf of compliant supplier', async function () {
+      const amount = ethers.parseUnits('12000', 6);
+      const dueDate = BigInt(Math.floor(Date.now() / 1000) + 30 * 86400);
+      const description = 'Sponsored Invoice #1';
+
+      const descHash = ethers.keccak256(ethers.toUtf8Bytes(description));
+      const invoiceHash = ethers.solidityPackedKeccak256(
+        ['address', 'uint256', 'uint256', 'bytes32', 'address'],
+        [anchor.address, amount, dueDate, descHash, await usdcMock.getAddress()]
+      );
+
+      const signature = await underwriter.signMessage(ethers.getBytes(invoiceHash));
+
+      // Owner (relayer) submits on behalf of supplier
+      await expect(
+        factorFi
+          .connect(owner)
+          .submitInvoiceOnBehalf(supplier.address, anchor.address, amount, dueDate, description, invoiceHash, signature, await usdcMock.getAddress())
+      ).to.emit(factorFi, 'InvoiceSubmitted');
+
+      // Verify supplier on invoice is indeed the supplier, not the owner/relayer
+      const inv = await factorFi.getInvoice(0n);
+      expect(inv.supplier).to.equal(supplier.address);
+    });
+
+    it('Should revert if non-owner attempts to submit invoice on behalf of another supplier', async function () {
+      const amount = ethers.parseUnits('12000', 6);
+      const dueDate = BigInt(Math.floor(Date.now() / 1000) + 30 * 86400);
+      const description = 'Sponsored Invoice #2';
+
+      const descHash = ethers.keccak256(ethers.toUtf8Bytes(description));
+      const invoiceHash = ethers.solidityPackedKeccak256(
+        ['address', 'uint256', 'uint256', 'bytes32', 'address'],
+        [anchor.address, amount, dueDate, descHash, await usdcMock.getAddress()]
+      );
+
+      const signature = await underwriter.signMessage(ethers.getBytes(invoiceHash));
+
+      // supplier tries to submit on behalf of owner/relayer
+      await expect(
+        factorFi
+          .connect(supplier)
+          .submitInvoiceOnBehalf(owner.address, anchor.address, amount, dueDate, description, invoiceHash, signature, await usdcMock.getAddress())
+      ).to.be.revertedWith('Only owner can submit on behalf of supplier');
+    });
+
+    it('Should revert if owner attempts to submit on behalf of non-compliant supplier', async function () {
+      const amount = ethers.parseUnits('12000', 6);
+      const dueDate = BigInt(Math.floor(Date.now() / 1000) + 30 * 86400);
+      const description = 'Sponsored Invoice #3';
+
+      const descHash = ethers.keccak256(ethers.toUtf8Bytes(description));
+      const invoiceHash = ethers.solidityPackedKeccak256(
+        ['address', 'uint256', 'uint256', 'bytes32', 'address'],
+        [anchor.address, amount, dueDate, descHash, await usdcMock.getAddress()]
+      );
+
+      const signature = await underwriter.signMessage(ethers.getBytes(invoiceHash));
+
+      // De-whitelist supplier first
+      await factorFi.connect(owner).updateComplianceStatus(supplier.address, false);
+
+      // Try to submit sponsored invoice - should revert
+      await expect(
+        factorFi
+          .connect(owner)
+          .submitInvoiceOnBehalf(supplier.address, anchor.address, amount, dueDate, description, invoiceHash, signature, await usdcMock.getAddress())
+      ).to.be.revertedWith('Supplier is not compliant');
+    });
+  });
 });
