@@ -48,24 +48,36 @@ export class UnderwriterAgent {
     return signature
   }
 
-  // 3. Dynamic OCR parsing of invoice documents (PDF/images)
+  // 3. Dynamic text parsing of invoice documents (PDF/TXT/JSON)
   public static async parseInvoiceDocument(fileBuffer: Buffer, fileName: string): Promise<InvoiceDetails> {
     console.log(`[Underwriter Agent] Extracting invoice structure from file: ${fileName} (${fileBuffer.length} bytes)`)
 
-    // Simple LLM-OCR simulation parsing standard corporate invoices
-    // Acme Corp / Tesla, Inc components
-    let amount = "15000"
-    let description = "Acme Corp supply components"
-    let anchor = "0x32a398da1243c8b991aba311a7db8fd860c234a5" // Deployed/Mock registered anchor address
-    
-    if (fileName.toLowerCase().includes('tesla')) {
-      amount = "25000"
-      description = "Tesla EV Batteries Factoring Receivable"
-      anchor = "0x32a398da1243c8b991aba311a7db8fd860c234a5"
-    } else if (fileName.toLowerCase().includes('apple')) {
-      amount = "8000"
-      description = "Apple Inc. Silicon Wafer Supply"
-      anchor = "0x32a398da1243c8b991aba311a7db8fd860c234a5"
+    const content = fileBuffer.toString('utf8')
+
+    // Find amount (e.g. Amount: 15000 or Total: $25,000)
+    const amountRegex = /(?:amount|total|value|price)[:\s=]+\$?([\d,]+(?:\.\d{1,2})?)/i
+    // Find anchor address (0x...)
+    const anchorRegex = /(?:anchor|debtor|buyer|target|to)[:\s=]+(0x[a-fA-F0-9]{40})/i
+    // Find description
+    const descRegex = /(?:description|desc|item|details|subject)[:\s=]+([^\r\n]+)/i
+
+    const amountMatch = content.match(amountRegex)
+    const anchorMatch = content.match(anchorRegex)
+    const descMatch = content.match(descRegex)
+
+    let amount = '15000'
+    if (amountMatch) {
+      amount = amountMatch[1].replace(/,/g, '')
+    }
+
+    let anchor = '0x32a398da1243c8b991aba311a7db8fd860c234a5' // Fallback anchor address
+    if (anchorMatch) {
+      anchor = anchorMatch[1].toLowerCase()
+    }
+
+    let description = `Invoice supply - ${fileName}`
+    if (descMatch) {
+      description = descMatch[1].trim()
     }
 
     const futureDate = Math.floor(Date.now() / 1000) + 30 * 86400 // due in 30 days

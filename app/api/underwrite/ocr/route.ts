@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { UnderwriterAgent } from '@/lib/underwrite-agent'
 import { GatewayClient } from '@/lib/gateway-client'
+import { createPublicClient, http } from 'viem'
+import { arcTestnet } from '@/lib/arc-config'
+import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi } from '@/lib/contracts'
 
 const NANOPAYMENT_FEE = 0.0001 // $0.0001 USDC
 const DAILY_LIMIT = 100 // Maximum 100 invoice scans per user per 24 hours
@@ -78,13 +81,39 @@ export async function POST(req: Request) {
     const parsedDetails = await UnderwriterAgent.parseInvoiceDocument(buffer, file.name)
     parsedDetails.token = token
     
-    // Dynamic rating check: Default rating 920 for Acme, 950 for Tesla
-    const rating = file.name.toLowerCase().includes('tesla') ? 950 : 920
+    // Fetch real credit rating from blockchain for the anchor address
+    const publicClient = createPublicClient({
+      chain: arcTestnet,
+      transport: http()
+    })
+
+    let rating = 700 // Fallback default score if lookup fails or unregistered
+    try {
+      const anchorData = await publicClient.readContract({
+        address: FACTORFI_CONTRACT_ADDRESS,
+        abi: factorFiAbi,
+        functionName: 'getAnchor',
+        args: [parsedDetails.anchor as `0x${string}`]
+      }) as any
+      
+      const isRegistered = anchorData?.isRegistered ?? anchorData?.[4]
+      const creditRating = anchorData?.creditRating ?? anchorData?.[1]
+
+      if (anchorData && isRegistered) {
+        rating = Number(creditRating)
+        console.log(`[Underwrite API] Found registered anchor ${parsedDetails.anchor} on-chain with rating ${rating}`)
+      } else {
+        console.log(`[Underwrite API] Anchor ${parsedDetails.anchor} not registered on-chain. Using default fallback rating ${rating}`)
+      }
+    } catch (e) {
+      console.warn(`[Underwrite API] Failed to read on-chain anchor details, using default. Error:`, e)
+    }
+
     const ratingDecision = UnderwriterAgent.calculateRiskMargin(rating)
 
     if (ratingDecision.decision === 'REJECTED') {
       return NextResponse.json({
-        error: 'Invoice underwriting rejected due to low debtor credit score',
+        error: `Invoice underwriting rejected: debtor credit score (${rating}) is below minimum limit.`,
         rating
       }, { status: 400 })
     }

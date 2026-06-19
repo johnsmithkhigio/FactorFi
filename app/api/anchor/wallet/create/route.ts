@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     console.log('Company:', companyName)
     console.log('Rating:', creditRating)
 
-    // 1. Generate programmatic wallet credentials
+    // 1. Generate programmatic wallet credentials via Circle
     const manager = CircleDevWalletsManager.getInstance()
     const wallet = await manager.createProgrammaticWallet(companyName)
 
@@ -45,12 +45,7 @@ export async function POST(req: NextRequest) {
       transport: http()
     })
 
-    // Execute Anchor registration call on-chain on behalf of the generated wallet
-    // Since registerAnchor registers msg.sender, we can execute the registration transaction
-    // directly from the generated programmatic wallet itself!
-    // But since the generated wallet has 0 USDC for gas, we first fund it with a tiny amount of gas,
-    // or we submit the transaction from the generated wallet sponsored by the relayer!
-    // To fund the newly generated wallet with enough gas to self-register:
+    // Fund the newly generated wallet with enough gas to self-register
     console.log('Funding generated wallet with gas from relayer...')
     const fundHash = await masterWalletClient.sendTransaction({
       to: wallet.address as `0x${string}`,
@@ -59,22 +54,14 @@ export async function POST(req: NextRequest) {
     await publicClient.waitForTransactionReceipt({ hash: fundHash })
     console.log('Funding transaction confirmed. Self-registering anchor...')
 
-    // Now, have the generated wallet register itself on the FactorFi contract
-    const selfPrivateKey = manager.decryptSecret(wallet.encryptedKey)
-    const selfAccount = privateKeyToAccount(`0x${selfPrivateKey}`)
-    const selfWalletClient = createWalletClient({
-      account: selfAccount,
-      chain: arcTestnet,
-      transport: http()
-    })
-
-    const regHash = await selfWalletClient.writeContract({
-      address: FACTORFI_CONTRACT_ADDRESS,
-      abi: factorFiAbi,
-      functionName: 'registerAnchor',
-      args: [companyName, BigInt(creditRating)]
-    })
-    await publicClient.waitForTransactionReceipt({ hash: regHash })
+    // Now, have the generated wallet register itself on the FactorFi contract via Circle Developer-Controlled Wallets API
+    const regHash = await manager.executeTransaction(
+      wallet.walletId,
+      FACTORFI_CONTRACT_ADDRESS,
+      factorFiAbi,
+      'registerAnchor',
+      [companyName, BigInt(creditRating)]
+    )
     console.log('Anchor successfully registered on-chain! Hash:', regHash)
 
     // Generate a secure Bearer Token for corporate API access
@@ -85,7 +72,7 @@ export async function POST(req: NextRequest) {
       walletId: wallet.walletId,
       address: wallet.address,
       companyName: wallet.companyName,
-      encryptedKey: wallet.encryptedKey,
+      encryptedKey: wallet.walletId, // Return walletId for frontend compatibility
       registrationHash: regHash,
       apiKey: bearerToken,
       message: 'Developer-Controlled wallet successfully deployed and registered as Anchor!'

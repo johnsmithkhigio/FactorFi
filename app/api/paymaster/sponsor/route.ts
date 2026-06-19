@@ -71,8 +71,9 @@ export async function POST(req: NextRequest) {
     const txHash = await walletClient.writeContract({
       address: FACTORFI_CONTRACT_ADDRESS,
       abi: factorFiAbi,
-      functionName: 'submitInvoice',
+      functionName: 'submitInvoiceOnBehalf',
       args: [
+        supplier,
         anchor, 
         amountParsed, 
         dueDateUnix, 

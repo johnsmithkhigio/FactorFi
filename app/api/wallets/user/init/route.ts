@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { keccak256, encodePacked } from 'viem'
+import { initiateUserControlledWalletsClient, Blockchain } from '@circle-fin/user-controlled-wallets'
+import crypto from 'crypto'
+
+const circleClient = initiateUserControlledWalletsClient({
+  apiKey: process.env.CIRCLE_API_KEY!,
+})
 
 export async function POST(req: NextRequest) {
   try {
-    const { email } = await req.json()
+    const { email, fetchAddressOnly, userToken: inputUserToken } = await req.json()
 
     if (!email || !email.includes('@')) {
       return NextResponse.json(
@@ -12,40 +17,93 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const userId = email.toLowerCase().trim()
+
+    // 1. Fetch address only if requested after PIN challenge completion
+    if (fetchAddressOnly && inputUserToken) {
+      console.log(`[Circle W3S] Fetching wallet address for user: ${userId}`)
+      const walletsRes = await circleClient.listWallets({ userToken: inputUserToken })
+      const wallets = walletsRes.data?.wallets || []
+
+      if (wallets.length > 0) {
+        const arcWallet = wallets.find((w: any) => w.blockchain === Blockchain.ArcTestnet) || wallets[0]
+        console.log(`[Circle W3S] Found wallet address: ${arcWallet.address}`)
+        return NextResponse.json({
+          success: true,
+          address: arcWallet.address,
+        })
+      } else {
+        return NextResponse.json(
+          { error: 'No wallets found for this user.' },
+          { status: 404 }
+        )
+      }
+    }
+
     console.log('=== Initializing Circle Non-Custodial Wallet Session ===')
     console.log('User Email:', email)
 
-    // Compute a deterministic wallet address on Arc Testnet based on email
-    // This allows the supplier to maintain the exact same wallet across sessions
-    const hashedEmail = keccak256(encodePacked(['string'], [email.toLowerCase().trim()]))
-    
-    // Construct a deterministic address using the hashed email bytes
-    const baseAddress = '0x3c' + hashedEmail.slice(2, 40)
-    const walletAddress = baseAddress.toLowerCase() as `0x${string}`
+    // 2. Register user if not exists
+    try {
+      await circleClient.createUser({ userId })
+      console.log(`[Circle W3S] Created new user profile for: ${userId}`)
+    } catch (err: any) {
+      const code = err.response?.data?.code
+      if (code === 155106) {
+        console.log(`[Circle W3S] User already registered: ${userId}`)
+      } else {
+        console.warn(`[Circle W3S] createUser warning (proceeding):`, err.response?.data || err.message)
+      }
+    }
 
-    // Mock highly realistic Circle session parameters
-    const userToken = `uc_tok_${keccak256(encodePacked(['string', 'uint256'], [email, BigInt(Date.now())])).slice(2, 24)}`
-    const encryptionKey = `enc_key_${keccak256(encodePacked(['string'], [email])).slice(2, 32)}`
-    const challengeId = `chal_${keccak256(encodePacked(['string', 'string'], [email, 'pin_setup'])).slice(2, 24)}`
+    // 3. Generate User Token & Encryption Key (valid for 60 mins)
+    const tokenRes = await circleClient.createUserToken({ userId })
+    const { userToken, encryptionKey } = (tokenRes.data as any) || {}
+    console.log('[Circle W3S] Session token generated successfully')
 
-    console.log('Circle Session Token Generated:', userToken)
-    console.log('Deterministic SME Wallet Address:', walletAddress)
+    // 4. Check if user already has wallets
+    const walletsRes = await circleClient.listWallets({ userToken })
+    const wallets = walletsRes.data?.wallets || []
+
+    if (wallets.length > 0) {
+      const arcWallet = wallets.find((w: any) => w.blockchain === Blockchain.ArcTestnet) || wallets[0]
+      console.log(`[Circle W3S] Existing wallet found: ${arcWallet.address}`)
+      return NextResponse.json({
+        success: true,
+        email: email,
+        address: arcWallet.address,
+        challengeId: null,
+        userToken,
+        encryptionKey,
+        expiresAt: Date.now() + 60 * 60 * 1000,
+        message: 'Circle user logged in successfully!'
+      })
+    }
+
+    // 5. Initiate PIN & Wallet creation challenge for new users
+    console.log('[Circle W3S] Creating user PIN with wallets challenge')
+    const pinRes = await circleClient.createUserPinWithWallets({
+      userToken,
+      blockchains: [Blockchain.ArcTestnet],
+      accountType: 'SCA',
+      idempotencyKey: crypto.randomUUID(),
+    })
+    const { challengeId } = (pinRes.data as any) || {}
 
     return NextResponse.json({
       success: true,
       email: email,
-      address: walletAddress,
+      challengeId,
       userToken,
       encryptionKey,
-      challengeId,
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days session persistence
-      message: 'Circle user session initialized successfully!'
+      expiresAt: Date.now() + 60 * 60 * 1000,
+      message: 'Circle user challenge initiated successfully!'
     })
 
   } catch (err: any) {
-    console.error('Failed to initialize embedded wallet session:', err)
+    console.error('Failed to initialize Circle wallet session:', err.response?.data || err)
     return NextResponse.json(
-      { error: 'Session initialization failed', details: err.message },
+      { error: 'Circle Session initialization failed', details: err.response?.data?.message || err.message },
       { status: 500 }
     )
   }

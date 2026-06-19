@@ -32,15 +32,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (!encryptedKey) {
+    // encryptedKey represents the Circle walletId passed from the Anchor dashboard
+    const walletId = encryptedKey
+    if (!walletId) {
       return NextResponse.json(
-        { error: 'Encrypted corporate wallet key is required' },
+        { error: 'Circle wallet ID is required' },
         { status: 400 }
       )
     }
 
     console.log(`=== Programmatic Action Request: ${action.toUpperCase()} ===`)
     console.log('Invoice ID:', invoiceId)
+    console.log('Circle Wallet ID:', walletId)
 
     const manager = CircleDevWalletsManager.getInstance()
     const functionName = action === 'approve' ? 'approveInvoice' : 'settleInvoice'
@@ -48,7 +51,6 @@ export async function POST(req: NextRequest) {
     // If settling, we must verify that the corporate wallet has approved USDC allowance first
     // Since settleInvoice transfers USDC from Anchor to contract, we perform automated approvals
     if (action === 'settle') {
-      const privateKey = manager.decryptSecret(encryptedKey)
       const publicClient = createPublicClient({ chain: arcTestnet, transport: http() })
       
       // Look up invoice amount
@@ -63,9 +65,9 @@ export async function POST(req: NextRequest) {
 
       console.log(`Settle action detected. Executing automatic USDC approval of ${amount.toString()} decimals for FactorFi contract...`)
       
-      // Perform automated approval from corporate wallet
+      // Perform automated approval from corporate developer-controlled wallet
       const approveHash = await manager.executeTransaction(
-        encryptedKey,
+        walletId,
         USDC_ADDRESS_ARC,
         usdcAbi,
         'approve',
@@ -74,9 +76,9 @@ export async function POST(req: NextRequest) {
       console.log('Automated USDC Approval transaction confirmed:', approveHash)
     }
 
-    // 2. Route the transaction to the serialized queue to execute approve/settle on-chain
+    // 2. Route the transaction to the serialized queue to execute approve/settle on-chain via Circle API
     const txHash = await manager.executeTransaction(
-      encryptedKey,
+      walletId,
       FACTORFI_CONTRACT_ADDRESS,
       factorFiAbi,
       functionName,
