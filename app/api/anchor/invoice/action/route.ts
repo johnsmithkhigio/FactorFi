@@ -18,6 +18,24 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    try {
+      const base64Payload = token.substring(7) // remove 'ff_api_'
+      const decodedPayload = Buffer.from(base64Payload, 'base64').toString('utf8')
+      const [companyName, address] = decodedPayload.split(':')
+      if (!companyName || !address || !address.startsWith('0x')) {
+        return NextResponse.json(
+          { error: 'Unauthorized: Invalid corporate key payload structure' },
+          { status: 401 }
+        )
+      }
+      console.log(`[API Auth] Successfully authenticated corporate client: ${companyName} (${address})`)
+    } catch (err) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Failed to decode bearer token' },
+        { status: 401 }
+      )
+    }
+
     if (!action || !['approve', 'settle'].includes(action)) {
       return NextResponse.json(
         { error: 'Action must be either "approve" or "settle"' },

@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     console.log('Anchor successfully registered on-chain! Hash:', regHash)
 
     // Generate a secure Bearer Token for corporate API access
-    const bearerToken = `ff_api_${Buffer.from(companyName + wallet.address).toString('base64').slice(0, 32)}`
+    const bearerToken = `ff_api_${Buffer.from(`${companyName}:${wallet.address}`).toString('base64')}`
 
     return NextResponse.json({
       success: true,
