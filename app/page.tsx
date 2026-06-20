@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useReadContract } from 'wagmi'
 import { LayoutDashboard, FileText, Building2, TrendingUp, Shield, ArrowRightLeft, ExternalLink, Hexagon, Home } from 'lucide-react'
@@ -34,6 +34,16 @@ const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode }[] = [
 export default function FactorFiApp() {
   const [activeView, setActiveView] = useState<View>('landing')
   const { address, isConnected, providerType } = useUnifiedAccount()
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const view = params.get('view') as View | null
+      if (view && ['landing', 'dashboard', 'supplier', 'anchor', 'investor', 'bridge', 'credit'].includes(view)) {
+        setActiveView(view)
+      }
+    }
+  }, [])
 
   const { data: usdcBalance } = useReadContract({
     address: USDC_ADDRESS_ARC,
