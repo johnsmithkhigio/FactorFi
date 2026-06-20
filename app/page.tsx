@@ -18,6 +18,8 @@ import CreditView from './views/CreditView'
 import { useUnifiedAccount } from '@/lib/web3-provider'
 import EmbeddedAuth from './components/EmbeddedAuth'
 import ComplianceModal from './components/ComplianceModal'
+import { useOnboarding } from './components/OnboardingProvider'
+import { HelpCircle } from 'lucide-react'
 
 type View = 'landing' | 'dashboard' | 'supplier' | 'anchor' | 'investor' | 'bridge' | 'credit'
 
@@ -34,6 +36,7 @@ const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode }[] = [
 export default function FactorFiApp() {
   const [activeView, setActiveView] = useState<View>('landing')
   const { address, isConnected, providerType } = useUnifiedAccount()
+  const { startTour } = useOnboarding()
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -88,7 +91,7 @@ export default function FactorFiApp() {
               <span className="brand-tag">Arc</span>
             </div>
 
-            <nav className="navbar-nav">
+            <nav className="navbar-nav" data-tour="nav-tabs">
               {NAV_ITEMS.map((item) => (
                 <button
                   key={item.id}
@@ -103,6 +106,28 @@ export default function FactorFiApp() {
           </div>
 
           <div className="navbar-right">
+            <button 
+              onClick={startTour}
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid var(--ff-border)',
+                borderRadius: 'var(--ff-radius-sm)',
+                padding: '6px 12px',
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--ff-text-secondary)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                height: 28,
+                transition: 'all var(--ff-transition)'
+              }}
+              className="btn-secondary"
+            >
+              <HelpCircle size={13} />
+              <span>Tour</span>
+            </button>
             <div className="network-badge">
               <span className="dot" />
               Arc Testnet
@@ -117,7 +142,7 @@ export default function FactorFiApp() {
                 </a>
               </div>
             )}
-            <div className="connect-btn-wrapper" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="connect-btn-wrapper" data-tour="connect-wallet" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <EmbeddedAuth />
               {providerType !== 'circle' && (
                 <ConnectButton showBalance={false} chainStatus="none" accountStatus="address" />

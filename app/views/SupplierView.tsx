@@ -399,6 +399,7 @@ export default function SupplierView() {
         <div className="grid-2" style={{ marginTop: 12, gap: 20 }}>
           {/* File drag-drop input zone */}
           <div 
+            data-tour="supply-finance"
             style={{ 
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               border: '2px dashed var(--ff-border)', padding: 24, borderRadius: 8, cursor: 'pointer',

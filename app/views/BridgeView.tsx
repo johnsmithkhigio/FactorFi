@@ -269,7 +269,7 @@ export default function BridgeView() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div className="grid-2">
         {/* Bridge Action Card */}
-        <div className="card">
+        <div className="card" data-tour="bridge-assets">
           <div className="card-header">
             <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Globe size={18} color="var(--ff-primary)" /> Cross-Border Capital Inflow (Circle CCTP)

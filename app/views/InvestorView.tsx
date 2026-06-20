@@ -343,7 +343,7 @@ export default function InvestorView() {
     <>
       <div className="grid-2" style={{ marginBottom: 24 }}>
         {/* Programmable Yield Vault (Auto-Factor Vault UI) */}
-        <div className="card">
+        <div className="card" data-tour="investor-vaults">
           <div className="card-header">
             <span className="card-title">Programmable Yield Vault</span>
             <span className="badge badge-approved" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
