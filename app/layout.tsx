@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Web3Provider } from '@/lib/web3-provider'
 import { Toaster } from 'sonner'
 import { ModalProvider } from './components/ModalProvider'
+import { OnboardingProvider } from './components/OnboardingProvider'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -38,18 +39,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <Web3Provider>
           <ModalProvider>
-            {children}
-            <Toaster
-              position="bottom-right"
-              theme="dark"
-              richColors
-              toastOptions={{
-                style: {
-                  fontFamily: 'var(--ff-font)',
-                  fontSize: '13px',
-                },
-              }}
-            />
+            <OnboardingProvider>
+              {children}
+              <Toaster
+                position="bottom-right"
+                theme="dark"
+                richColors
+                toastOptions={{
+                  style: {
+                    fontFamily: 'var(--ff-font)',
+                    fontSize: '13px',
+                  },
+                }}
+              />
+            </OnboardingProvider>
           </ModalProvider>
         </Web3Provider>
       </body>
