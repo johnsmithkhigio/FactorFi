@@ -54,3 +54,6 @@ typechain-types/
 coverage/
 coverage.json
 
+# Scratch files
+scratch/
+
