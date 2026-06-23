@@ -5,6 +5,8 @@ import { createPublicClient, http } from 'viem'
 import { arcTestnet } from '@/lib/arc-config'
 import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi } from '@/lib/contracts'
 
+export const dynamic = 'force-dynamic'
+
 const NANOPAYMENT_FEE = 0.0001 // $0.0001 USDC
 const DAILY_LIMIT = 100 // Maximum 100 invoice scans per user per 24 hours
 

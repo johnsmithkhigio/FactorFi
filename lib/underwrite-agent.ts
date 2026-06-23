@@ -39,7 +39,7 @@ export class UnderwriterAgent {
     if (!privateKey) {
       throw new Error('Server Environment: Missing PRIVATE_KEY for underwriter identity registration')
     }
-    const account = privateKeyToAccount(`0x${privateKey}`)
+    const account = privateKeyToAccount(`0x${privateKey.replace(/^0x/, '')}`)
     
     // signMessage automatically wraps the message in the standard Ethereum Signed Message envelope
     const signature = await account.signMessage({

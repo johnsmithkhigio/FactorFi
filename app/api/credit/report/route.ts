@@ -3,6 +3,8 @@ import { createPublicClient, http, formatUnits } from 'viem'
 import { arcTestnet } from '@/lib/arc-config'
 import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi, USDC_DECIMALS } from '@/lib/contracts'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   try {
     const { entityAddress } = await req.json()

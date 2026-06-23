@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server'
 import { Hex, keccak256, encodePacked } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)

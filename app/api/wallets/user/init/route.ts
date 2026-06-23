@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { initiateUserControlledWalletsClient, Blockchain } from '@circle-fin/user-controlled-wallets'
 import crypto from 'crypto'
 
+export const dynamic = 'force-dynamic'
+
 const circleClient = initiateUserControlledWalletsClient({
   apiKey: process.env.CIRCLE_API_KEY!,
 })

@@ -36,8 +36,8 @@ describe('Circle Gateway Nanopayments (x402) Integration Tests', function () {
       expect(balance).to.equal(0.0500);
     });
 
-    it('Should deposit USDC and update balance', function () {
-      const result = GatewayClient.depositToGateway(user.address, 0.0250, '0xmocktxhash');
+    it('Should deposit USDC and update balance', async function () {
+      const result = await GatewayClient.depositToGateway(user.address, 0.0250, '0xmocktxhash');
       expect(result.success).to.equal(true);
       expect(result.newBalance).to.equal(0.0750);
 
@@ -45,8 +45,8 @@ describe('Circle Gateway Nanopayments (x402) Integration Tests', function () {
       expect(balance).to.equal(0.0750);
     });
 
-    it('Should record transactions in ledger history', function () {
-      GatewayClient.depositToGateway(user.address, 0.0100);
+    it('Should record transactions in ledger history', async function () {
+      await GatewayClient.depositToGateway(user.address, 0.0100);
       GatewayClient.spendGatewayBalance(user.address, 0.0001, 'Underwriter AI Scan');
 
       const txs = GatewayClient.getTransactions(user.address);

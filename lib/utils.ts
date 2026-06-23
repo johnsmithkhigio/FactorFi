@@ -1,5 +1,5 @@
 import { formatUnits } from 'viem'
-import { USDC_DECIMALS } from './contracts'
+import { USDC_DECIMALS } from './contracts.ts'
 
 /** Format USDC amount from raw units (6 decimals) to display string */
 export function formatUSDC(raw: bigint): string {

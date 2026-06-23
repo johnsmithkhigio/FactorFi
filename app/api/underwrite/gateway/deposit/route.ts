@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GatewayClient } from '@/lib/gateway-client'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
@@ -31,7 +33,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid address or amount' }, { status: 400 })
     }
 
-    const result = GatewayClient.depositToGateway(address, amount, txHash)
+    const result = await GatewayClient.depositToGateway(address, amount, txHash)
 
     return NextResponse.json({
       success: true,
@@ -39,6 +41,7 @@ export async function POST(req: NextRequest) {
       newBalance: result.newBalance,
     })
   } catch (error: any) {
+    console.error('Gateway deposit processing failed:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

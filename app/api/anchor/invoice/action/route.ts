@@ -4,6 +4,8 @@ import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi, USDC_ADDRESS_ARC, usdcAbi } fro
 import { createPublicClient, http } from 'viem'
 import { arcTestnet } from '@/lib/arc-config'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get('Authorization')

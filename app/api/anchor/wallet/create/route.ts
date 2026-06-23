@@ -5,6 +5,8 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { arcTestnet } from '@/lib/arc-config'
 import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi } from '@/lib/contracts'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   try {
     const { companyName, creditRating } = await req.json()

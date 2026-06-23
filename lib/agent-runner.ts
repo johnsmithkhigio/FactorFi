@@ -1,8 +1,8 @@
 import { createPublicClient, http, WalletClient } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { arcTestnet } from './arc-config'
-import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi, USDC_ADDRESS_ARC, usdcAbi, AUTO_FACTOR_VAULT_ADDRESS } from './contracts'
-import { UnderwriterAgent, InvoiceDetails } from './underwrite-agent'
+import { arcTestnet } from './arc-config.ts'
+import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi, USDC_ADDRESS_ARC, usdcAbi, AUTO_FACTOR_VAULT_ADDRESS } from './contracts.ts'
+import { UnderwriterAgent, InvoiceDetails } from './underwrite-agent.ts'
 
 export interface AgentLogStep {
   timestamp: number
