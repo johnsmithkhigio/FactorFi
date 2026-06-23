@@ -193,6 +193,14 @@ body {
   gap: 16px;
 }
 
+.connect-btn-wrapper,
+.connect-btn-wrapper button,
+.connect-btn-wrapper [class*="Connect"],
+.connect-btn-wrapper [class*="connect"] {
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
 .balance-pill {
   display: flex;
   align-items: center;
