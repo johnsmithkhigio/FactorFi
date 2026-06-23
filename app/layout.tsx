@@ -40,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Web3Provider>
           <ModalProvider>
             <OnboardingProvider>
+              <a href="#main-content" className="skip-link">Skip to main content</a>
               {children}
               <Toaster
                 position="bottom-right"

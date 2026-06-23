@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import MarketingHeader from '../components/MarketingHeader'
 import MarketingFooter from '../components/MarketingFooter'
+import Breadcrumbs from '../components/Breadcrumbs'
+import CtaSystem from '../components/CtaSystem'
+import RelatedContent from '../components/RelatedContent'
 import { Search, HelpCircle, ChevronDown, MessageSquare } from 'lucide-react'
 
 interface FAQItem {
@@ -64,10 +67,11 @@ export default function FAQPage() {
     <div className="app-shell" style={{ background: 'var(--ff-bg)', color: 'var(--ff-text)' }}>
       <MarketingHeader />
 
-      <main style={{ maxWidth: 800, margin: '60px auto', width: '100%', padding: '0 24px', flex: 1 }}>
+      <main id="main-content" style={{ maxWidth: 800, margin: '20px auto 60px', width: '100%', padding: '0 24px', flex: 1 }}>
+        <Breadcrumbs />
         
         {/* Intro */}
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+        <div style={{ textAlign: 'center', marginBottom: 40, marginTop: 20 }}>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: '#fff', letterSpacing: '-0.03em' }}>Frequently Asked Questions</h2>
           <p style={{ color: 'var(--ff-text-secondary)', fontSize: 14.5, marginTop: 8, maxWidth: 480, margin: '8px auto 0' }}>
             Find immediate answers regarding on-chain invoice factoring, compliance screening, gas abstraction, and CCTP bridging.
@@ -135,19 +139,8 @@ export default function FAQPage() {
           )}
         </div>
 
-        {/* Direct CTA */}
-        <div className="card" style={{ marginTop: 48, background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.05) 0%, transparent 100%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 24, border: '1px solid var(--ff-border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <MessageSquare size={24} style={{ color: 'var(--ff-primary)' }} />
-            <div>
-              <div style={{ fontWeight: 600, color: '#fff', fontSize: 15 }}>Still have questions?</div>
-              <div style={{ fontSize: 12.5, color: 'var(--ff-text-muted)' }}>Our support agents are available 24/7.</div>
-            </div>
-          </div>
-          <a href="/contact" className="btn btn-secondary" style={{ padding: '8px 16px', fontSize: 13 }}>
-            Contact Support
-          </a>
-        </div>
+        <CtaSystem variant="support" layout="banner" />
+        <RelatedContent currentPage="faq" />
 
       </main>
 

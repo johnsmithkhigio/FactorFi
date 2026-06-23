@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import MarketingHeader from '../components/MarketingHeader'
 import MarketingFooter from '../components/MarketingFooter'
+import Breadcrumbs from '../components/Breadcrumbs'
+import RelatedContent from '../components/RelatedContent'
 import { Send, CheckCircle2, MessageSquare, HelpCircle, Mail, Globe, Github } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -34,10 +36,11 @@ export default function ContactPage() {
     <div className="app-shell" style={{ background: 'var(--ff-bg)', color: 'var(--ff-text)' }}>
       <MarketingHeader />
 
-      <main style={{ maxWidth: 900, margin: '60px auto', width: '100%', padding: '0 24px', flex: 1 }}>
+      <main id="main-content" style={{ maxWidth: 900, margin: '20px auto 60px', width: '100%', padding: '0 24px', flex: 1 }}>
+        <Breadcrumbs />
         
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+        <div style={{ textAlign: 'center', marginBottom: 40, marginTop: 20 }}>
           <h2 style={{ fontSize: 32, fontWeight: 800, color: '#fff', letterSpacing: '-0.03em' }}>Contact & Support</h2>
           <p style={{ color: 'var(--ff-text-secondary)', fontSize: 14.5, marginTop: 8 }}>
             Have a question, feedback, or a bug report? Get in touch with our core team.
@@ -181,6 +184,8 @@ export default function ContactPage() {
           </aside>
 
         </div>
+
+        <RelatedContent currentPage="contact" />
 
       </main>
 

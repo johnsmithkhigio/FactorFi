@@ -2,6 +2,9 @@
 
 import MarketingHeader from '../components/MarketingHeader'
 import MarketingFooter from '../components/MarketingFooter'
+import Breadcrumbs from '../components/Breadcrumbs'
+import CtaSystem from '../components/CtaSystem'
+import RelatedContent from '../components/RelatedContent'
 import { Landmark, Compass, Award, ExternalLink, Github, Users, Target } from 'lucide-react'
 
 export default function AboutPage() {
@@ -9,10 +12,11 @@ export default function AboutPage() {
     <div className="app-shell" style={{ background: 'var(--ff-bg)', color: 'var(--ff-text)' }}>
       <MarketingHeader />
 
-      <main style={{ maxWidth: 1000, margin: '60px auto', width: '100%', padding: '0 24px', flex: 1, display: 'flex', flexDirection: 'column', gap: 56 }}>
+      <main id="main-content" style={{ maxWidth: 1000, margin: '20px auto 60px', width: '100%', padding: '0 24px', flex: 1, display: 'flex', flexDirection: 'column', gap: 40 }}>
+        <Breadcrumbs />
         
         {/* Story Intro */}
-        <section style={{ textAlign: 'center' }}>
+        <section style={{ textAlign: 'center', marginTop: 20 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--ff-primary-subtle)', border: '1px solid var(--ff-primary)', padding: '6px 14px', borderRadius: 20, marginBottom: 20 }}>
             <Target size={14} color="var(--ff-primary)" />
             <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Our Mission</span>
@@ -100,6 +104,9 @@ export default function AboutPage() {
 
           </div>
         </section>
+
+        <CtaSystem variant="general" layout="banner" />
+        <RelatedContent currentPage="about" />
 
       </main>
 

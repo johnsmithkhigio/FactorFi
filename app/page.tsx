@@ -18,6 +18,7 @@ import CreditView from './views/CreditView'
 import { useUnifiedAccount } from '@/lib/web3-provider'
 import EmbeddedAuth from './components/EmbeddedAuth'
 import ComplianceModal from './components/ComplianceModal'
+import Breadcrumbs from './components/Breadcrumbs'
 import { useOnboarding } from './components/OnboardingProvider'
 import { HelpCircle } from 'lucide-react'
 
@@ -153,7 +154,12 @@ export default function FactorFiApp() {
       </header>
 
       {/* Main Content */}
-      <main className="main-content">
+      <main className="main-content" id="main-content">
+        {activeView !== 'landing' && (
+          <div style={{ padding: '0 24px', maxWidth: 1200, width: '100%', margin: '0 auto 10px' }}>
+            <Breadcrumbs />
+          </div>
+        )}
         <div className="page-content animate-in" key={activeView}>
           {renderView()}
         </div>

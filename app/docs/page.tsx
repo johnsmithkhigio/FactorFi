@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import MarketingHeader from '../components/MarketingHeader'
 import MarketingFooter from '../components/MarketingFooter'
+import Breadcrumbs from '../components/Breadcrumbs'
+import CtaSystem from '../components/CtaSystem'
+import RelatedContent from '../components/RelatedContent'
 import { BookOpen, Zap, Cpu, Key, Database, ChevronRight, Terminal, Check } from 'lucide-react'
 
 type DocTab = 'intro' | 'quickstart' | 'mechanics' | 'circle' | 'arc'
@@ -21,8 +24,9 @@ export default function DocsPage() {
     <div className="app-shell" style={{ background: 'var(--ff-bg)', color: 'var(--ff-text)' }}>
       <MarketingHeader />
 
-      <main style={{ maxWidth: 1200, margin: '40px auto', width: '100%', padding: '0 24px', flex: 1 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 40 }} className="docs-grid">
+      <main id="main-content" style={{ maxWidth: 1200, margin: '20px auto 60px', width: '100%', padding: '0 24px', flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <Breadcrumbs />
+        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 40, marginTop: 10 }} className="docs-grid">
           
           {/* Left Sidebar */}
           <aside style={{ position: 'sticky', top: 100, height: 'fit-content', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -191,6 +195,10 @@ export default function DocsPage() {
             )}
           </section>
         </div>
+
+        <CtaSystem variant="developer" layout="banner" />
+        <RelatedContent currentPage="docs" />
+
       </main>
 
       <MarketingFooter />

@@ -2,6 +2,8 @@
 
 import MarketingHeader from '../../components/MarketingHeader'
 import MarketingFooter from '../../components/MarketingFooter'
+import Breadcrumbs from '../../components/Breadcrumbs'
+import RelatedContent from '../../components/RelatedContent'
 import { ShieldAlert } from 'lucide-react'
 
 export default function PrivacyPage() {
@@ -9,8 +11,9 @@ export default function PrivacyPage() {
     <div className="app-shell" style={{ background: 'var(--ff-bg)', color: 'var(--ff-text)' }}>
       <MarketingHeader />
 
-      <main style={{ maxWidth: 800, margin: '60px auto', width: '100%', padding: '0 24px', flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+      <main id="main-content" style={{ maxWidth: 800, margin: '20px auto 60px', width: '100%', padding: '0 24px', flex: 1 }}>
+        <Breadcrumbs />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, marginTop: 20 }}>
           <ShieldAlert size={28} color="var(--ff-primary)" />
           <h2 style={{ fontSize: 28, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>Privacy Policy</h2>
         </div>
@@ -38,6 +41,9 @@ export default function PrivacyPage() {
             </p>
           </div>
         </section>
+
+        <RelatedContent currentPage="privacy" />
+
       </main>
 
       <MarketingFooter />
