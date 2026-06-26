@@ -1,7 +1,7 @@
 {
   "balances": {
     "0x70997970c51812dc3a010c7d01b50e0d17dc79c8": 0.05,
-    "0xdaf164e74b6b566d55fa2941911a33edb49ae6c5": 0.05
+    "0xdaf164e74b6b566d55fa2941911a33edb49ae6c5": 0.0498
   },
   "transactions": [
     {
@@ -11,6 +11,20 @@
       "timestamp": 1782466008165,
       "description": "Complimentary trial credits for AI Underwriting",
       "txHash": "0xwelcomecredits"
+    },
+    {
+      "address": "0xdaf164e74b6b566d55fa2941911a33edb49ae6c5",
+      "type": "spend",
+      "amount": 0.0001,
+      "timestamp": 1782478019434,
+      "description": "Underwriter AI request: 395501"
+    },
+    {
+      "address": "0xdaf164e74b6b566d55fa2941911a33edb49ae6c5",
+      "type": "spend",
+      "amount": 0.0001,
+      "timestamp": 1782479456870,
+      "description": "Underwriter AI request: 27339"
     }
   ]
 }

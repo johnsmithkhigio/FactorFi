@@ -53,10 +53,36 @@ async function main() {
   // 2. Submit Invoices
   console.log('\n📄 Submitting Invoices...');
   const thirtyDays = BigInt(Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60);
+
+  // Generate invoice hash and signature to comply with AI Underwriter checks
+  const invoiceHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
+  const signature = await deployerAccount.signMessage({
+    message: { raw: invoiceHash }
+  });
   
   const subData = encodeFunctionData({
-    abi: [{ name: 'submitInvoice', type: 'function', inputs: [{type:'address'}, {type:'uint256'}, {type:'uint256'}, {type:'string'}] }],
-    args: [deployerAccount.address, parseUnits('0.1', 6), thirtyDays, 'Cloud Hosting Services Q4']
+    abi: [{ 
+      name: 'submitInvoice', 
+      type: 'function', 
+      inputs: [
+        { name: '_anchor', type: 'address' },
+        { name: '_amount', type: 'uint256' },
+        { name: '_dueDate', type: 'uint256' },
+        { name: '_description', type: 'string' },
+        { name: '_invoiceHash', type: 'bytes32' },
+        { name: '_signature', type: 'bytes' },
+        { name: '_token', type: 'address' }
+      ] 
+    }],
+    args: [
+      deployerAccount.address, 
+      parseUnits('0.1', 6), 
+      thirtyDays, 
+      'Cloud Hosting Services Q4',
+      invoiceHash,
+      signature,
+      USDC_ADDRESS
+    ]
   });
   let hash = await wallet.sendTransaction({ to: FACTORFI_ADDRESS, data: subData });
   await waitForTx(hash);
