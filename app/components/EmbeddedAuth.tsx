@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useUnifiedAccount } from '@/lib/web3-provider'
-import { Mail, ShieldAlert, CheckCircle, ShieldCheck, Settings, LogOut, Copy, Check } from 'lucide-react'
+import { Mail, ShieldAlert, CheckCircle, ShieldCheck, Settings, LogOut, Copy, Check, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { truncateAddress, getExplorerAddressLink } from '@/lib/utils'
 
@@ -278,7 +278,7 @@ export default function EmbeddedAuth({ headless = false }: EmbeddedAuthProps) {
               <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Settings size={16} color="var(--ff-primary)" /> Business Account Settings
               </span>
-              <button className="btn-close" style={{ color: 'var(--ff-text-muted)', fontSize: 18 }} onClick={() => setShowSettings(false)}>×</button>
+              <button className="btn-close" onClick={() => setShowSettings(false)}><X size={14} /></button>
             </div>
             <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ background: 'var(--ff-bg)', padding: 12, borderRadius: 8, border: '1px solid var(--ff-border)' }}>
@@ -330,11 +330,8 @@ export default function EmbeddedAuth({ headless = false }: EmbeddedAuthProps) {
         }}>
           <div className="card" style={{ maxWidth: 420, width: '90%', background: '#09090b', borderColor: 'var(--ff-border)', padding: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: -10 }}>
-              <button 
-                style={{ background: 'none', border: 'none', color: 'var(--ff-text-muted)', fontSize: 22, cursor: 'pointer' }} 
-                onClick={() => setShowSettings(false)}
-              >
-                ×
+              <button className="btn-close" onClick={() => setShowSettings(false)}>
+                <X size={14} />
               </button>
             </div>
             {renderAuthModal()}

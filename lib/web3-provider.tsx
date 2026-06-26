@@ -2,15 +2,18 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { WagmiProvider, createConfig, http, useAccount, useDisconnect } from 'wagmi'
+import { injected } from 'wagmi/connectors'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { RainbowKitProvider, getDefaultConfig, darkTheme } from '@rainbow-me/rainbowkit'
+import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit'
 import '@rainbow-me/rainbowkit/styles.css'
 import { arcTestnet } from './arc-config'
 
-const config = getDefaultConfig({
-  appName: 'FactorFi',
-  projectId: 'factorfi-arc-reverse-factoring',
+// Manual config with only the injected (browser extension) connector.
+// This avoids loading MetaMask SDK and Reown AppKit chunks that require
+// a valid WalletConnect Cloud projectId and fail with ChunkLoadError.
+const config = createConfig({
   chains: [arcTestnet],
+  connectors: [injected()],
   transports: {
     [arcTestnet.id]: http('https://rpc.testnet.arc.network'),
   },

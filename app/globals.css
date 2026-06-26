@@ -556,6 +556,49 @@ select.form-input {
   color: var(--ff-text);
 }
 
+.btn-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--ff-border);
+  border-radius: var(--ff-radius-sm);
+  color: var(--ff-text-muted);
+  cursor: pointer;
+  transition: all var(--ff-transition);
+  font-size: 0;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.btn-close:hover {
+  background: var(--ff-danger-subtle);
+  border-color: rgba(248, 113, 113, 0.25);
+  color: var(--ff-danger);
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: var(--ff-surface);
+  border: 1px solid var(--ff-border);
+  border-radius: var(--ff-radius-full);
+  color: var(--ff-text-muted);
+  cursor: pointer;
+  transition: all var(--ff-transition);
+}
+
+.btn-icon:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--ff-border-highlight);
+  color: var(--ff-text);
+}
+
 /* ========== GRID LAYOUTS ========== */
 .grid-2 {
   display: grid;
