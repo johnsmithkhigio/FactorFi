@@ -325,23 +325,39 @@ export default function AnchorView() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <select 
-                      className="form-input" 
-                      value={apiAction} 
-                      onChange={e => setApiAction(e.target.value as 'approve' | 'settle')}
-                      style={{ flex: 1, padding: '4px 8px', fontSize: 12, height: 32 }}
-                    >
-                      <option value="approve">Action: APPROVE</option>
-                      <option value="settle">Action: SETTLE</option>
-                    </select>
-                    <input 
-                      type="number" 
-                      className="form-input" 
-                      placeholder="Invoice ID" 
-                      value={apiInvoiceId}
-                      onChange={e => setApiInvoiceId(e.target.value)}
-                      style={{ flex: 1, padding: '4px 8px', fontSize: 12, height: 32 }}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <select 
+                        className="form-input" 
+                        value={apiAction} 
+                        onChange={e => setApiAction(e.target.value as 'approve' | 'settle')}
+                        style={{ flex: 1, padding: '4px 8px', fontSize: 12, height: 32 }}
+                      >
+                        <option value="approve">Action: APPROVE</option>
+                        <option value="settle">Action: SETTLE</option>
+                      </select>
+                      <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 10 }}>
+                        ⓘ
+                        <span className="tooltip-content">
+                          Select the API operation type: APPROVE (acknowledges receivable) or SETTLE (triggers payback).
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <input 
+                        type="number" 
+                        className="form-input" 
+                        placeholder="e.g. 42" 
+                        value={apiInvoiceId}
+                        onChange={e => setApiInvoiceId(e.target.value)}
+                        style={{ flex: 1, padding: '4px 8px', fontSize: 12, height: 32 }}
+                      />
+                      <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 10 }}>
+                        ⓘ
+                        <span className="tooltip-content">
+                          The unique numeric identifier of the invoice receivable.
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   <div>
                     <div style={{ fontSize: 10, color: 'var(--ff-text-muted)', marginBottom: 4 }}>Editable JSON Request Body:</div>
@@ -424,12 +440,28 @@ export default function AnchorView() {
         <div className="card">
           <div className="card-header"><span className="card-title">Register Corporate Buyer Account</span></div>
           <div className="form-group">
-            <label className="form-label">Company Name</label>
-            <input className="form-input" placeholder="Acme Corp" value={companyName} onChange={e => setCompanyName(e.target.value)} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Company Name</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  Enter the registered legal name of the corporate buyer/anchor profile.
+                </span>
+              </div>
+            </div>
+            <input className="form-input" placeholder="e.g. Acme Corp" value={companyName} onChange={e => setCompanyName(e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Performance credit rating (0-1000)</label>
-            <input className="form-input" type="number" min="0" max="1000" value={creditRating} onChange={e => setCreditRating(e.target.value)} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Performance credit rating (0-1000)</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  The initial risk credit score for this corporate entity on-chain (scale 0-1000, 1000 being lowest default risk).
+                </span>
+              </div>
+            </div>
+            <input className="form-input" type="number" min="0" max="1000" placeholder="e.g. 800" value={creditRating} onChange={e => setCreditRating(e.target.value)} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <button className="btn btn-secondary" style={{ width: '100%' }} onClick={handleRegister} disabled={regPending || regConfirming}>
@@ -456,8 +488,16 @@ export default function AnchorView() {
         <div className="card">
           <div className="card-header"><span className="card-title">Approve Invoice (Manual)</span></div>
           <div className="form-group">
-            <label className="form-label">Invoice ID</label>
-            <input className="form-input" type="number" placeholder="0" value={invoiceIdToApprove} onChange={e => setInvoiceIdToApprove(e.target.value)} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Invoice ID</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  The unique on-chain ID of the invoice receivable submitted by the supplier that you wish to approve.
+                </span>
+              </div>
+            </div>
+            <input className="form-input" type="number" placeholder="e.g. 42" value={invoiceIdToApprove} onChange={e => setInvoiceIdToApprove(e.target.value)} />
           </div>
           <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleApprove} disabled={apPending || apConfirming}>
             <CheckCircle size={16} /> {apPending ? 'Signing...' : apConfirming ? 'Confirming...' : 'Approve Invoice'}
@@ -480,12 +520,28 @@ export default function AnchorView() {
             <span className="badge badge-funded" style={{ background: 'var(--ff-primary-subtle)', color: 'var(--ff-primary)' }}>2-Step Flow</span>
           </div>
           <div className="form-group">
-            <label className="form-label">Invoice ID</label>
-            <input className="form-input" type="number" placeholder="0" value={invoiceIdToSettle} onChange={e => setInvoiceIdToSettle(e.target.value)} disabled={settleStep !== 'idle'} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Invoice ID</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  The unique on-chain ID of the approved invoice receivable that you are ready to pay.
+                </span>
+              </div>
+            </div>
+            <input className="form-input" type="number" placeholder="e.g. 42" value={invoiceIdToSettle} onChange={e => setInvoiceIdToSettle(e.target.value)} disabled={settleStep !== 'idle'} />
           </div>
           <div className="form-group">
-            <label className="form-label">Face Value (USDC)</label>
-            <input className="form-input" type="number" step="0.01" placeholder="1000.00" value={settleAmount} onChange={e => setSettleAmount(e.target.value)} disabled={settleStep !== 'idle'} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Face Value (USDC)</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  The total payment amount of the invoice in USDC. Must match the face value on the smart contract.
+                </span>
+              </div>
+            </div>
+            <input className="form-input" type="number" step="0.01" placeholder="e.g. 1500.00" value={settleAmount} onChange={e => setSettleAmount(e.target.value)} disabled={settleStep !== 'idle'} />
           </div>
 
           {settleStep === 'idle' && (
