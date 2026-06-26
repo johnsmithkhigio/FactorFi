@@ -94,6 +94,38 @@ export default function SupplierView() {
 
     setDepositing(true)
     const toastId = toast.loading('Initiating USDC deposit transaction...')
+
+    if (providerType === 'circle') {
+      // Circle Programmable Wallet instant credit sandbox bypass
+      try {
+        const mockHash = '0xmock_circle_deposit_' + Date.now().toString(16) + Math.random().toString(16).slice(2, 8)
+        
+        await new Promise(r => setTimeout(r, 1200))
+
+        const response = await fetch('/api/underwrite/gateway/deposit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address,
+            amount: parsedAmount,
+            txHash: mockHash
+          })
+        })
+
+        if (response.ok) {
+          toast.success(`Sandbox Deposit of ${depositAmount} USDC credited successfully!`, { id: toastId })
+          fetchGatewayData()
+        } else {
+          toast.error('Failed to register deposit on backend', { id: toastId })
+        }
+        setDepositing(false)
+      } catch (err: any) {
+        toast.error(`Error: ${err.message}`, { id: toastId })
+        setDepositing(false)
+      }
+      return
+    }
+
     try {
       writeContract({
         address: USDC_ADDRESS_ARC,
