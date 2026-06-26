@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
         address: FACTORFI_CONTRACT_ADDRESS,
         abi: factorFiAbi,
         functionName: 'registerAnchorOnBehalf',
-        args: [anchor, 'Auto-Registered Anchor', 750n]
+        args: [anchor, 'Auto-Registered Anchor', BigInt(750)]
       })
       console.log(`Anchor registration tx submitted. Hash: ${registerAnchorHash}. Waiting for confirmation...`)
       await publicClient.waitForTransactionReceipt({ hash: registerAnchorHash })
