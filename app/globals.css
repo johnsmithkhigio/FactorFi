@@ -1545,6 +1545,46 @@ select.form-input {
   }
 }
 
+/* Custom Tooltip Classes */
+.tooltip-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tooltip-trigger .tooltip-content {
+  visibility: hidden;
+  opacity: 0;
+  width: 260px;
+  background-color: #0c0a09;
+  color: #e4e4e7;
+  text-align: left;
+  border-radius: 6px;
+  padding: 10px 14px;
+  position: absolute;
+  z-index: 1000;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  font-size: 11px;
+  font-family: var(--ff-font);
+  font-weight: normal;
+  line-height: 1.4;
+  border: 1px solid var(--ff-border);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.tooltip-trigger:hover .tooltip-content,
+.tooltip-trigger:focus-within .tooltip-content {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+
 
 
 

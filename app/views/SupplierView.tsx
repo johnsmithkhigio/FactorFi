@@ -675,7 +675,15 @@ export default function SupplierView() {
           </p>
 
           <div className="form-group">
-            <label className="form-label">Currency Stablecoin *</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Currency Stablecoin *</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  Select the stablecoin you wish to receive funding in (e.g., USDC or EURC).
+                </span>
+              </div>
+            </div>
             <select 
               className="form-select" 
               value={selectedToken} 
@@ -700,23 +708,78 @@ export default function SupplierView() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Anchor Address *</label>
-            <input className="form-input form-input-mono" value={anchorAddr} onChange={e => setAnchorAddr(e.target.value)} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Anchor Address *</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  The 42-character Ethereum/Arc network address of the buyer/debtor who owes this invoice (e.g., 0x70997970C51812dc3A010C7d01b50e0d17dc79C8).
+                </span>
+              </div>
+            </div>
+            <input 
+              className="form-input form-input-mono" 
+              placeholder="e.g. 0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+              value={anchorAddr} 
+              onChange={e => setAnchorAddr(e.target.value)} 
+            />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Amount ({tokenConfig.icon} {tokenConfig.symbol}) *</label>
-            <input className="form-input" type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Amount ({tokenConfig.icon} {tokenConfig.symbol}) *</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  The face value of the invoice to be financed. Ensure this matches the amount specified in your PDF document.
+                </span>
+              </div>
+            </div>
+            <input 
+              className="form-input" 
+              type="number" 
+              step="0.01" 
+              placeholder="e.g. 1500.00"
+              value={amount} 
+              onChange={e => setAmount(e.target.value)} 
+            />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Due Date *</label>
-            <input className="form-input" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Due Date *</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  The maturity/due date of the invoice. Payout discount rates are calculated based on the days remaining until maturity.
+                </span>
+              </div>
+            </div>
+            <input 
+              className="form-input" 
+              type="date" 
+              placeholder="Select due date"
+              value={dueDate} 
+              onChange={e => setDueDate(e.target.value)} 
+            />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Description / Invoice Number</label>
-            <input className="form-input" value={description} onChange={e => setDescription(e.target.value)} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Description / Invoice Number</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  Optional reference identifier or brief description (e.g., INV-2026-0042 / Wafer Supply Shipment).
+                </span>
+              </div>
+            </div>
+            <input 
+              className="form-input" 
+              placeholder="e.g. INV-2026-0042 / Wafer Supply Shipment"
+              value={description} 
+              onChange={e => setDescription(e.target.value)} 
+            />
           </div>
 
           <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} onClick={handleSubmit} disabled={isPending || isConfirming || !address}>
