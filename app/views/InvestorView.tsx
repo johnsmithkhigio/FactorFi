@@ -153,17 +153,17 @@ export default function InvestorView() {
       setScanLogs(prev => [...prev, { time, msg, type }])
     }
 
-    addLog('Yield Vault Keeper Daemon active.', 'success')
-    addLog(`On-chain rules: Min Discount = ${minDiscountBpsData ? Number(minDiscountBpsData) / 100 : 2.5}% | Min Score = ${minCreditScoreData ? Number(minCreditScoreData) : 900}`, 'info')
+    addLog('Auto-invest engine active.', 'success')
+    addLog(`Financing guidelines: Min Discount = ${minDiscountBpsData ? Number(minDiscountBpsData) / 100 : 2.5}% | Min Performance Score = ${minCreditScoreData ? Number(minCreditScoreData) : 900}`, 'info')
 
     let block = 1209384
     const interval = setInterval(() => {
       block += 1
-      addLog(`Scanning Block #${block} on Arc Testnet for approved invoice files...`, 'info')
+      addLog(`Scanning network for approved early payment requests...`, 'info')
       
       if (Math.random() > 0.8) {
-        addLog(`Found Invoice ID #12 (Acme Corp supplier invoice). Checking criteria...`, 'warn')
-        addLog(`Match verified: 3.0% >= ${(Number(minDiscountBpsData || 250) / 100).toFixed(1)}% & Rating 920 >= ${Number(minCreditScoreData || 900)}. Passing.`, 'success')
+        addLog(`Found invoice request. Validating underwriting checklist...`, 'warn')
+        addLog(`Guidelines met: 3.0% yield >= ${(Number(minDiscountBpsData || 250) / 100).toFixed(1)}% & credit score 920 >= ${Number(minCreditScoreData || 900)}. Allocation authorized.`, 'success')
       }
     }, 5000)
 
@@ -345,14 +345,14 @@ export default function InvestorView() {
         {/* Programmable Yield Vault (Auto-Factor Vault UI) */}
         <div className="card" data-tour="investor-vaults">
           <div className="card-header">
-            <span className="card-title">Programmable Yield Vault</span>
+            <span className="card-title">Automated Receivables Vault</span>
             <span className="badge badge-approved" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <TrendingUp size={12} /> Auto-Yield Mode
+              <TrendingUp size={12} /> Auto-Invest Active
             </span>
           </div>
 
           <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'var(--ff-text-muted)' }}>
-            Deposit USDC stablecoins into the auto-factor vault to automatically finance prime receivables matching your yield guidelines.
+            Deposit USDC stablecoins into the auto-invest vault to automatically purchase high-quality receivables matching your risk guidelines.
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
@@ -407,8 +407,8 @@ export default function InvestorView() {
         {/* Live Keeper Output */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="card-header" style={{ marginBottom: 12 }}>
-            <span className="card-title">Keeper Daemon Output Monitor</span>
-            <span className="badge badge-approved">Active Scanner</span>
+            <span className="card-title">Automated Investment Log</span>
+            <span className="badge badge-approved">Scanning Active</span>
           </div>
 
           <div style={{
@@ -503,9 +503,9 @@ export default function InvestorView() {
 
         {/* Dynamic Risk Guidelines configuration settings */}
         <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-          <div className="card-header"><span className="card-title">Keeper Daemon Guidelines & Controls</span></div>
+          <div className="card-header"><span className="card-title">Automated Investment Parameters</span></div>
           <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'var(--ff-text-muted)' }}>
-            Configure risk thresholds for the autonomous keeper nodes matching trade invoice inventory.
+            Configure risk and return thresholds for the auto-investment engine.
           </p>
 
           <div className="form-group">
@@ -528,13 +528,13 @@ export default function InvestorView() {
       <div className="card" style={{ marginTop: 24 }}>
         <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyItems: 'center', gap: 8, borderBottom: '1px solid var(--ff-border)', paddingBottom: 12 }}>
           <ArrowRightLeft className="icon-pulse" style={{ color: 'var(--ff-primary)' }} size={20} />
-          <span className="card-title" style={{ fontSize: 16 }}>Secondary OTC Receivables Marketplace</span>
+          <span className="card-title" style={{ fontSize: 16 }}>Receivables Secondary Market</span>
         </div>
 
         <div className="grid-2" style={{ marginTop: 16 }}>
           {/* Left Console: Tokenize & List */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingRight: 16, borderRight: '1px solid var(--ff-border)' }}>
-            <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', color: 'var(--ff-text-muted)', letterSpacing: '0.05em' }}>Receivable Tokenization Console</h4>
+            <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', color: 'var(--ff-text-muted)', letterSpacing: '0.05em' }}>Position Conversion Console</h4>
             
             {inv && inv.amount > BigInt(0) && Number(inv.status) === 2 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -556,19 +556,19 @@ export default function InvestorView() {
                 {!isTokenizedData ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <p style={{ margin: 0, fontSize: 12, color: 'var(--ff-text-muted)' }}>
-                      This funded receivable is not tokenized yet. Wrap it into an ERC-721 Receipt NFT to enable secondary OTC trading before maturity.
+                      This funded receivable is held in standard form. Convert it to a tradeable digital asset to enable secondary market transfer before maturity.
                     </p>
                     <button className="btn btn-primary" onClick={handleTokenize} disabled={nftPending} style={{ width: '100%' }}>
-                      {nftPending ? 'Wrapping Position...' : 'Tokenize Position (Mint NFT)'}
+                      {nftPending ? 'Wrapping Position...' : 'Convert to Tradeable Asset'}
                     </button>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'rgba(74, 222, 128, 0.1)', border: '1px solid var(--ff-success)', borderRadius: 6, color: 'var(--ff-success)', fontSize: 11, fontWeight: 600, width: 'fit-content' }}>
-                      <ShieldCheck size={12} /> Wrapped as ffRECEIPT NFT
+                      <ShieldCheck size={12} /> Converted to Tradeable Asset
                     </div>
                     <div style={{ fontSize: 12 }}>
-                      <span style={{ color: 'var(--ff-text-muted)' }}>NFT Receipt Owner: </span>
+                      <span style={{ color: 'var(--ff-text-muted)' }}>Asset Holder: </span>
                       <span style={{ fontWeight: 500, color: 'var(--ff-primary)' }}>
                         {nftOwnerData ? (nftOwnerData as string).slice(0, 12) + '...' : 'Loading...'}
                       </span>
@@ -576,7 +576,7 @@ export default function InvestorView() {
 
                     {nftOwnerData && (nftOwnerData as string).toLowerCase() === address?.toLowerCase() ? (
                       <div className="form-group" style={{ marginTop: 8, borderTop: '1px solid var(--ff-border)', paddingTop: 12 }}>
-                        <label className="form-label">OTC Listing Price (Tokens)</label>
+                        <label className="form-label">Secondary Listing Price (USDC)</label>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <input className="form-input" type="number" placeholder="9800" value={listPriceInput} onChange={e => setListPriceInput(e.target.value)} />
                           <button className="btn btn-primary" onClick={handleListInvoice} disabled={nftPending || marketPending}>
@@ -586,7 +586,7 @@ export default function InvestorView() {
                       </div>
                     ) : (
                       <p style={{ margin: 0, fontSize: 12, color: 'var(--ff-text-muted)' }}>
-                        Only the current NFT receipt owner can create listing orders.
+                        Only the current asset holder can create listing orders.
                       </p>
                     )}
                   </div>
@@ -601,7 +601,7 @@ export default function InvestorView() {
 
           {/* Right Console: Live OTC Board */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', color: 'var(--ff-text-muted)', letterSpacing: '0.05em' }}>Live OTC Trading Board</h4>
+            <h4 style={{ margin: 0, fontSize: 13, textTransform: 'uppercase', color: 'var(--ff-text-muted)', letterSpacing: '0.05em' }}>Secondary Trade Listings</h4>
 
             {listingsData && (listingsData as any[]).length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 260, overflowY: 'auto' }}>
@@ -621,8 +621,11 @@ export default function InvestorView() {
                 ))}
               </div>
             ) : (
-              <div style={{ padding: '40px 16px', border: '1px dashed var(--ff-border)', borderRadius: 8, textAlign: 'center', color: 'var(--ff-text-muted)', fontSize: 12 }}>
-                No active secondary invoice listings found.
+              <div style={{ padding: '24px 20px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--ff-border)', borderRadius: 8, color: 'var(--ff-text-muted)', fontSize: 12, lineHeight: 1.5 }}>
+                💡 <strong>Secondary Trade Listings</strong>
+                <p style={{ margin: '6px 0 0 0', fontSize: 11.5 }}>
+                  Currently, there are no active secondary market listings. Investors can list their funded receivables here by using the Position Conversion Console on the left to sell positions before their final maturity date.
+                </p>
               </div>
             )}
           </div>

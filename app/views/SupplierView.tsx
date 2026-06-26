@@ -391,12 +391,12 @@ export default function SupplierView() {
       <div className="card" style={{ marginBottom: 24, border: '1px solid var(--ff-border)' }}>
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <BrainCircuit size={18} color="var(--ff-primary)" /> Autonomous OCR Underwriter Portal
+            <BrainCircuit size={18} color="var(--ff-primary)" /> Automated Risk Analysis & PDF Invoice Import
           </span>
-          <span className="badge badge-approved">AI Verification Enabled</span>
+          <span className="badge badge-approved">Automated Underwriting Active</span>
         </div>
         
-        <div className="grid-2" style={{ marginTop: 12, gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', marginTop: 12, gap: 20 }}>
           {/* File drag-drop input zone */}
           <div 
             data-tour="supply-finance"
@@ -415,8 +415,8 @@ export default function SupplierView() {
               onChange={onFileChange}
             />
             <UploadCloud size={36} color="var(--ff-primary)" style={{ marginBottom: 10 }} />
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ff-text)' }}>Upload PDF Corporate Invoice</div>
-            <div style={{ fontSize: 11, color: 'var(--ff-text-muted)', marginTop: 4 }}>Drag & drop standard PDF files or click to open browser</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ff-text)' }}>Import Corporate Invoice</div>
+            <div style={{ fontSize: 11, color: 'var(--ff-text-muted)', marginTop: 4 }}>Drag & drop standard PDF files or select simulated mocks below</div>
             
             <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
               <button 
@@ -441,7 +441,7 @@ export default function SupplierView() {
           {/* Running progress logs */}
           <div style={{ background: '#050505', border: '1px solid var(--ff-border)', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ff-text-muted)', display: 'block', textTransform: 'uppercase', marginBottom: 12 }}>
-              Agentic Scan Monitor
+              Risk Assessment Activity Log
             </span>
             {agentRunning ? (
               <div style={{ fontFamily: 'var(--ff-mono)', fontSize: 11, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -455,17 +455,17 @@ export default function SupplierView() {
             ) : agentComplete ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ff-success)', fontSize: 12, fontWeight: 700 }}>
-                  <CheckCircle size={14} /> OCR Scan successfully parsed and cryptographically validated!
+                  <CheckCircle size={14} /> Risk validation successfully parsed and security-verified!
                 </div>
                 
                 <table style={{ width: '100%', fontSize: 11 }}>
                   <tbody>
                     <tr>
-                      <td style={{ color: 'var(--ff-text-muted)', padding: '2px 0' }}>AI Confidence Rating</td>
+                      <td style={{ color: 'var(--ff-text-muted)', padding: '2px 0' }}>Underwriting Confidence Rating</td>
                       <td style={{ fontWeight: 700, color: '#fff', textAlign: 'right' }}>{(confidence * 100).toFixed(0)}%</td>
                     </tr>
                     <tr>
-                      <td style={{ color: 'var(--ff-text-muted)', padding: '2px 0' }}>Debtor rating on Arc</td>
+                      <td style={{ color: 'var(--ff-text-muted)', padding: '2px 0' }}>Debtor Risk Profile Score</td>
                       <td style={{ fontWeight: 700, color: 'var(--ff-success)', textAlign: 'right' }}>{anchorRating} / 1000</td>
                     </tr>
                     <tr>
@@ -473,7 +473,7 @@ export default function SupplierView() {
                       <td style={{ fontWeight: 700, color: '#fff', textAlign: 'right' }}>{vaultLiquidity} USDC</td>
                     </tr>
                     <tr>
-                      <td style={{ color: 'var(--ff-text-muted)', padding: '2px 0' }}>Invoice Signature</td>
+                      <td style={{ color: 'var(--ff-text-muted)', padding: '2px 0' }}>System Verification Code</td>
                       <td style={{ fontFamily: 'var(--ff-mono)', color: 'var(--ff-primary)', textAlign: 'right' }}>
                         {underwriterSignature ? `${underwriterSignature.slice(0, 16)}...` : 'N/A'}
                       </td>
@@ -485,7 +485,7 @@ export default function SupplierView() {
                 <div style={{ marginTop: 6, borderTop: '1px solid var(--ff-border)', paddingTop: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: 'var(--ff-primary)', marginBottom: 8 }}>
                     <Bot size={12} />
-                    <span>Autonomous Agent ReAct Underwriting Loop:</span>
+                    <span>Automated Risk Profile Evaluation:</span>
                   </div>
                   <div style={{
                     background: '#070707', border: '1px solid #141414', borderRadius: 6, padding: '8px 10px',
@@ -518,7 +518,131 @@ export default function SupplierView() {
             ) : (
               <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--ff-text-muted)', fontSize: 12 }}>
                 <BadgeInfo size={20} style={{ margin: '0 auto 8px', color: '#666' }} />
-                No invoice currently scanned. Select mock shortcuts or upload an invoice PDF file above to execute underwriting parser.
+                No invoice currently imported. Use the quick-mock shortcuts or import a PDF invoice above to initiate automated risk analysis.
+              </div>
+            )}
+          </div>
+
+          {/* Column 3: Ingestion Sandbox (High Fidelity PDF Visual Template) */}
+          <div style={{ 
+            background: 'rgba(0,0,0,0.3)',
+            border: '1px dashed var(--ff-border)',
+            borderRadius: 8,
+            padding: 16,
+            minHeight: 250,
+            display: 'flex',
+            flexDirection: 'column',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ff-text-muted)', display: 'block', textTransform: 'uppercase', marginBottom: 12 }}>
+              Interactive OCR Ingestion Sandbox
+            </span>
+
+            {agentRunning ? (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                <style>{`
+                  @keyframes scanLaser {
+                    0% { top: 0%; }
+                    50% { top: 100%; }
+                    100% { top: 0%; }
+                  }
+                `}</style>
+                <div style={{ 
+                  position: 'absolute', top: 0, left: 0, width: '100%', height: 4, 
+                  background: 'linear-gradient(90deg, transparent, var(--ff-primary), transparent)',
+                  boxShadow: '0 0 10px var(--ff-primary)',
+                  animation: 'scanLaser 2s linear infinite'
+                }} />
+                <FileText size={48} className="pulse" color="var(--ff-text-muted)" style={{ opacity: 0.6 }} />
+                <div style={{ fontSize: 12, color: 'var(--ff-primary)', marginTop: 12, fontWeight: 600 }}>Scanning Invoice Stream...</div>
+                <div style={{ fontSize: 10, color: 'var(--ff-text-muted)', marginTop: 4 }}>Validating checksum & signature...</div>
+              </div>
+            ) : agentComplete ? (
+              <div style={{ 
+                flex: 1, 
+                background: '#fff', 
+                color: '#334155', 
+                borderRadius: 6, 
+                padding: 16, 
+                fontSize: 10, 
+                boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                position: 'relative',
+                border: '1px solid #cbd5e1'
+              }}>
+                <div style={{ position: 'absolute', top: 6, right: 6, fontSize: 8, color: 'var(--ff-success)', background: 'rgba(52, 211, 153, 0.1)', padding: '2px 4px', borderRadius: 4, border: '1px solid rgba(52, 211, 153, 0.2)', fontWeight: 'bold' }}>
+                  OCR PARSED
+                </div>
+
+                <div style={{ borderBottom: '2px solid #334155', paddingBottom: 6, marginBottom: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#1e293b' }}>
+                    Commercial Invoice
+                  </div>
+                  <div style={{ fontSize: 8, color: '#64748b', marginTop: 2 }}>
+                    Verified checksum ledger id: {invoiceHash ? `${invoiceHash.slice(0, 10)}...` : 'N/A'}
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 4 }}>
+                  <div>
+                    <div style={{ fontSize: 7, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Supplier (Issuer)</div>
+                    <div style={{ fontWeight: 600, color: '#334155' }}>
+                      {description.toLowerCase().includes('apple') ? 'Apple Wafer Supplies' : 'Tesla Chassis Parts Ltd'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 7, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Debtor (Anchor)</div>
+                    <div style={{ 
+                      fontWeight: 600, color: '#0ea5e9', padding: '2px 4px', background: 'rgba(14, 165, 233, 0.08)', 
+                      borderRadius: 4, border: '1px dashed #0ea5e9', display: 'inline-block' 
+                    }}>
+                      {anchorAddr ? `${anchorAddr.slice(0, 8)}...${anchorAddr.slice(-6)}` : 'Undefined Anchor'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ border: '1px dashed #cbd5e1', borderRadius: 4, padding: 8, background: '#f8fafc', marginBottom: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontWeight: 700 }}>Line Description</span>
+                    <span style={{ fontWeight: 700 }}>Subtotal</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
+                    <span>{description || 'Imported Cargo Invoices'}</span>
+                    <span style={{ 
+                      fontWeight: 700, color: '#10b981', background: 'rgba(16, 185, 129, 0.08)',
+                      padding: '1px 4px', border: '1px dashed #10b981', borderRadius: 4
+                    }}>
+                      {amount} {selectedToken}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, borderTop: '1px solid #e2e8f0', paddingTop: 6, marginTop: 'auto' }}>
+                  <div>
+                    <div style={{ fontSize: 7, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Due Date</div>
+                    <div style={{ 
+                      fontWeight: 600, color: '#f59e0b', padding: '2px 4px', background: 'rgba(245, 158, 11, 0.08)', 
+                      borderRadius: 4, border: '1px dashed #f59e0b', display: 'inline-block'
+                    }}>
+                      {dueDate}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 7, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>OCR Confidence</div>
+                    <div style={{ fontWeight: 700, color: '#10b981', fontSize: 11 }}>
+                      {(confidence * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--ff-text-muted)', fontSize: 12 }}>
+                <FileText size={36} color="#444" style={{ marginBottom: 10 }} />
+                <span>Invoice PDF sandbox placeholder</span>
+                <span style={{ fontSize: 10, color: '#555', marginTop: 4 }}>Select a mock invoice preset to trigger high-fidelity sandbox rendering.</span>
               </div>
             )}
           </div>
@@ -547,7 +671,7 @@ export default function SupplierView() {
           </div>
 
           <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'var(--ff-text-muted)' }}>
-            Confirm or adjust parsed OCR parameters prior to blockchain submission.
+            Confirm or adjust invoice details prior to submitting request for funding.
           </p>
 
           <div className="form-group">
@@ -597,7 +721,7 @@ export default function SupplierView() {
 
           <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} onClick={handleSubmit} disabled={isPending || isConfirming || !address}>
             {useGasless ? <Zap size={16} /> : <Send size={16} />}
-            {isPending ? 'Signing...' : isConfirming ? 'Confirming...' : useGasless ? `Execute via Paymaster (Free ${tokenConfig.symbol})` : 'Submit Invoice'}
+            {isPending ? 'Signing...' : isConfirming ? 'Confirming...' : useGasless ? `Request Early Payment (No Network Fee)` : 'Submit Invoice'}
           </button>
 
           {isSuccess && txHash && (
@@ -632,19 +756,19 @@ export default function SupplierView() {
 
           <div style={{ padding: 14, background: 'var(--ff-bg)', borderRadius: 8, border: '1px solid var(--ff-border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 13, color: 'var(--ff-success)', marginBottom: 6 }}>
-              <Zap size={14} /> Gasless Auto-Verification
+              <Zap size={14} /> Fee-Free Automated Verification
             </div>
             <div style={{ fontSize: 12, color: 'var(--ff-text-muted)', lineHeight: 1.5 }}>
-              Approved invoices qualify for automatic ERC-4337 gas sponsorship sponsored by the FactorFi paymaster registry. Suppliers incur $0 in gas.
+              Approved invoices qualify for direct transaction fee sponsorship. Suppliers pay zero network processing fees.
             </div>
           </div>
 
           <div style={{ padding: 14, background: 'var(--ff-bg)', borderRadius: 8, border: '1px solid var(--ff-border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 13, color: 'var(--ff-warn)', marginBottom: 6 }}>
-              <ShieldAlert size={14} color="var(--ff-primary)" /> Anti-Fraud Compliance
+              <ShieldAlert size={14} color="var(--ff-primary)" /> Risk Policy Verification
             </div>
             <div style={{ fontSize: 12, color: 'var(--ff-text-muted)', lineHeight: 1.5 }}>
-              Verification checks require signatures from registered AI underwriter agents. Submissions lacking valid signatures will fail.
+              Verification checks require approval signatures from authenticated underwriting agents.
             </div>
           </div>
         </div>
@@ -656,7 +780,7 @@ export default function SupplierView() {
         <div className="card" style={{ border: '1px solid var(--ff-border)' }}>
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Wallet size={18} color="var(--ff-primary)" /> Circle Gateway Nanopayments
+              <Wallet size={18} color="var(--ff-primary)" /> Analysis Credits Balance
             </span>
             <span className={`badge ${gatewayBalance !== null && gatewayBalance > 0 ? 'badge-approved' : 'badge-default'}`}>
               {gatewayBalance !== null && gatewayBalance > 0 ? 'Active' : 'No Balance'}
@@ -665,7 +789,7 @@ export default function SupplierView() {
 
           <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid var(--ff-border)', marginTop: 12 }}>
             <span style={{ fontSize: 11, color: 'var(--ff-text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
-              Available Gateway balance
+              Available Analysis Credits
             </span>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '8px 0' }}>
               <span style={{ fontSize: 32, fontWeight: 800, color: '#fff', fontFamily: 'var(--ff-mono)' }}>
@@ -674,12 +798,12 @@ export default function SupplierView() {
               <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ff-primary)' }}>USDC</span>
             </div>
             <p style={{ fontSize: 12, color: 'var(--ff-text-muted)', margin: 0 }}>
-              Charge Rate: <strong>$0.0001 USDC</strong> per invoice OCR page scan. Settle gas-free.
+              Pricing Rate: <strong>$0.0001 USDC</strong> per automated risk analysis page. Funded automatically.
             </p>
           </div>
 
           <div style={{ marginTop: 20 }}>
-            <label className="form-label" style={{ fontSize: 12, fontWeight: 600 }}>Deposit USDC to Gateway Channel</label>
+            <label className="form-label" style={{ fontSize: 12, fontWeight: 600 }}>Fund Analysis Credits</label>
             <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
               <div style={{ position: 'relative', flex: 1 }}>
                 <input
@@ -716,7 +840,7 @@ export default function SupplierView() {
         <div className="card" style={{ border: '1px solid var(--ff-border)' }}>
           <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Database size={18} color="var(--ff-success)" /> Microtransaction Ledger
+              <Database size={18} color="var(--ff-success)" /> Activity and Billing History
             </span>
             <span style={{ fontSize: 11, color: 'var(--ff-text-muted)', fontWeight: 600 }}>
               Volume: {transactions.filter(t => t.type === 'spend').length} scans
@@ -745,7 +869,7 @@ export default function SupplierView() {
                         {new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </td>
                       <td style={{ padding: '8px 4px', fontWeight: 500 }}>
-                        {t.type === 'deposit' ? 'Gateway Deposit' : 'OCR AI Page Scan'}
+                        {t.type === 'deposit' ? 'Fund Credits' : 'Analysis Processing'}
                       </td>
                       <td style={{ padding: '8px 4px', fontFamily: 'var(--ff-mono)', fontWeight: 600, color: t.type === 'deposit' ? 'var(--ff-success)' : 'var(--ff-primary)' }}>
                         {t.type === 'deposit' ? '+' : '-'}${t.amount.toFixed(4)}
@@ -767,7 +891,7 @@ export default function SupplierView() {
               </table>
             ) : (
               <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--ff-text-muted)', fontSize: 12 }}>
-                No microtransaction history found.<br />Depositing USDC and scanning invoices will populate records.
+                No billing history found.<br />Funding credits and processing invoices will populate records.
               </div>
             )}
           </div>

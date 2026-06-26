@@ -53,6 +53,19 @@ export default function AnchorView() {
   const [apiAction, setApiAction] = useState<'approve' | 'settle'>('approve')
   const [apiInvoiceId, setApiInvoiceId] = useState('')
   const [apiLoading, setApiLoading] = useState(false)
+  const [jsonPayload, setJsonPayload] = useState('')
+
+  useEffect(() => {
+    if (progWallet) {
+      setJsonPayload(JSON.stringify({
+        action: apiAction,
+        invoiceId: Number(apiInvoiceId) || 0,
+        encryptedKey: progWallet.encryptedKey
+      }, null, 2))
+    } else {
+      setJsonPayload('// Deploy programmatic wallet to view JSON payload')
+    }
+  }, [apiAction, apiInvoiceId, progWallet])
 
   // Load persisted programmatic wallet on mount
   useEffect(() => {
@@ -93,7 +106,7 @@ export default function AnchorView() {
   const handleDeployProgrammatic = async () => {
     if (!companyName) return toast.error('Enter company name')
     
-    setApiLogs(prev => [...prev, `[INIT] Generating Developer-Controlled Non-Custodial Wallet for ${companyName}...`])
+    setApiLogs(prev => [...prev, `[INIT] Generating secure API payment endpoints for ${companyName}...`])
     
     try {
       const res = await fetch('/api/anchor/wallet/create', {
@@ -125,10 +138,23 @@ export default function AnchorView() {
   // Trigger Programmatic Invoice Action from UI Console
   const handleExecuteApiAction = async () => {
     if (!progWallet) return toast.error('Deploy programmatic wallet first')
-    if (!apiInvoiceId) return toast.error('Enter Invoice ID')
+    
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(jsonPayload)
+    } catch (e: any) {
+      return toast.error('Invalid JSON payload format')
+    }
+
+    if (!parsedBody.invoiceId) return toast.error('Enter Invoice ID in JSON payload')
 
     setApiLoading(true)
-    setApiLogs(prev => [...prev, `[ERP TRIGGER] [POST] /api/anchor/invoice/action { action: "${apiAction}", invoiceId: ${apiInvoiceId} }`])
+    setApiLogs(prev => [
+      ...prev, 
+      `[ERP TRIGGER] [POST] /api/anchor/invoice/action`,
+      `Headers: { "Authorization": "Bearer ${progWallet.apiKey}" }`,
+      `Body: ${JSON.stringify(parsedBody, null, 2)}`
+    ])
     
     try {
       const res = await fetch('/api/anchor/invoice/action', {
@@ -137,11 +163,7 @@ export default function AnchorView() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${progWallet.apiKey}`
         },
-        body: JSON.stringify({
-          action: apiAction,
-          invoiceId: Number(apiInvoiceId),
-          encryptedKey: progWallet.encryptedKey
-        })
+        body: JSON.stringify(parsedBody)
       })
       
       const data = await res.json()
@@ -149,12 +171,11 @@ export default function AnchorView() {
 
       setApiLogs(prev => [
         ...prev,
-        `[OK] 200 SUCCESS - ${apiAction === 'approve' ? 'Approved' : 'Settled'} Invoice #${apiInvoiceId}`,
+        `[OK] 200 SUCCESS - ${parsedBody.action === 'approve' ? 'Approved' : 'Settled'} Invoice #${parsedBody.invoiceId}`,
         `[TX] Broadcasted to Arc Testnet. Confirmed Hash: ${data.hash}`
       ])
 
-      toast.success(`Invoice #${apiInvoiceId} successfully ${apiAction}d via API!`)
-      setApiInvoiceId('')
+      toast.success(`Invoice #${parsedBody.invoiceId} successfully ${parsedBody.action}d via API!`)
     } catch (err: any) {
       setApiLogs(prev => [...prev, `[ERROR] API execution failed: ${err.message}`])
       toast.error('API action failed', { description: err.message })
@@ -241,8 +262,8 @@ export default function AnchorView() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Bot size={22} color="var(--ff-primary)" className="pulse" />
             <div>
-              <span className="card-title" style={{ fontSize: 16 }}>Enterprise Automated ERP API Settings</span>
-              <div style={{ fontSize: 11, color: 'var(--ff-text-muted)', marginTop: 2 }}>Circle Developer-Controlled Programmable Corporate Wallets</div>
+              <span className="card-title" style={{ fontSize: 16 }}>Automated Buyer ERP Integration</span>
+              <div style={{ fontSize: 11, color: 'var(--ff-text-muted)', marginTop: 2 }}>Corporate Treasury Account & API Integration</div>
             </div>
           </div>
           {progWallet && (
@@ -287,7 +308,7 @@ export default function AnchorView() {
               </div>
 
               <div style={{ background: 'var(--ff-bg)', padding: '10px 14px', borderRadius: 8, border: '1px solid var(--ff-border)' }}>
-                <div style={{ fontSize: 10, color: 'var(--ff-text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>KMS Encrypted Key (Encrypted Secret Vault)</div>
+                <div style={{ fontSize: 10, color: 'var(--ff-text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Encrypted Secure Wallet Credentials</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', padding: 6, borderRadius: 4 }}>
                   <span style={{ fontSize: 11, fontFamily: 'var(--ff-mono)' }}>{progWallet.encryptedKey.slice(0, 48)}...</span>
                   <button onClick={() => handleCopy(progWallet.encryptedKey, 'secret')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ff-text-secondary)' }}>
@@ -298,33 +319,51 @@ export default function AnchorView() {
 
               {/* API Sandbox Test Tools */}
               <div style={{ borderTop: '1px solid var(--ff-border)', paddingTop: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ff-text)', marginBottom: 8 }}>ERP Programmatic Execution Test Console</div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <select 
-                    className="form-input" 
-                    value={apiAction} 
-                    onChange={e => setApiAction(e.target.value as 'approve' | 'settle')}
-                    style={{ flex: 1, padding: '4px 8px', fontSize: 12, height: 32 }}
-                  >
-                    <option value="approve">[POST] Approve Invoice</option>
-                    <option value="settle">[POST] Settle Invoice</option>
-                  </select>
-                  <input 
-                    type="number" 
-                    className="form-input" 
-                    placeholder="Invoice ID" 
-                    value={apiInvoiceId}
-                    onChange={e => setApiInvoiceId(e.target.value)}
-                    style={{ flex: 1, padding: '4px 8px', fontSize: 12, height: 32 }}
-                  />
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ff-text)', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>ERP API Sandbox Playground</span>
+                  <span style={{ fontSize: 10, color: 'var(--ff-text-muted)', fontFamily: 'var(--ff-mono)' }}>POST /api/anchor/invoice/action</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <select 
+                      className="form-input" 
+                      value={apiAction} 
+                      onChange={e => setApiAction(e.target.value as 'approve' | 'settle')}
+                      style={{ flex: 1, padding: '4px 8px', fontSize: 12, height: 32 }}
+                    >
+                      <option value="approve">Action: APPROVE</option>
+                      <option value="settle">Action: SETTLE</option>
+                    </select>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      placeholder="Invoice ID" 
+                      value={apiInvoiceId}
+                      onChange={e => setApiInvoiceId(e.target.value)}
+                      style={{ flex: 1, padding: '4px 8px', fontSize: 12, height: 32 }}
+                    />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--ff-text-muted)', marginBottom: 4 }}>Editable JSON Request Body:</div>
+                    <textarea
+                      value={jsonPayload}
+                      onChange={e => setJsonPayload(e.target.value)}
+                      className="form-input form-input-mono"
+                      style={{
+                        width: '100%', height: 90, background: '#070709', border: '1px solid var(--ff-border)',
+                        color: 'var(--ff-primary)', fontFamily: 'var(--ff-mono)', fontSize: 11, padding: 8,
+                        borderRadius: 6, resize: 'none'
+                      }}
+                    />
+                  </div>
                   <button 
                     onClick={handleExecuteApiAction}
                     disabled={apiLoading}
                     className="btn btn-primary" 
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 16px', height: 32, fontSize: 12 }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', height: 32, fontSize: 12 }}
                   >
-                    {apiLoading ? <RefreshCw className="pulse" size={13} /> : <Send size={13} />}
-                    Trigger
+                    {apiLoading ? <RefreshCw className="pulse spin" size={13} /> : <Send size={13} />}
+                    Broadcast JSON Webhook Action
                   </button>
                 </div>
               </div>
@@ -368,11 +407,11 @@ export default function AnchorView() {
             <Building2 size={36} color="var(--ff-text-muted)" style={{ margin: '0 auto 10px auto' }} />
             <h4 style={{ margin: '0 0 4px 0', color: 'var(--ff-text)' }}>Programmatic ERP Setup Needed</h4>
             <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'var(--ff-text-muted)', maxWidth: 420, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.4 }}>
-              To instantiate automated corporate actions, please fill the "Register as Anchor" form below and select "Deploy Corporate Programmatic Wallet" to launch the ERP listener.
+              To enable automated early payment approvals and direct ERP integration, register your corporate buyer profile below.
             </p>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <button onClick={handleDeployProgrammatic} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Bot size={16} /> Deploy Corporate Programmatic Wallet
+                <Bot size={16} /> Initialize Corporate Treasury Account
               </button>
             </div>
           </div>
@@ -383,22 +422,22 @@ export default function AnchorView() {
       <div className="grid-3">
         {/* Register */}
         <div className="card">
-          <div className="card-header"><span className="card-title">Register as Anchor (Manual)</span></div>
+          <div className="card-header"><span className="card-title">Register Corporate Buyer Account</span></div>
           <div className="form-group">
             <label className="form-label">Company Name</label>
             <input className="form-input" placeholder="Acme Corp" value={companyName} onChange={e => setCompanyName(e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">Credit Rating (0-1000)</label>
+            <label className="form-label">Performance credit rating (0-1000)</label>
             <input className="form-input" type="number" min="0" max="1000" value={creditRating} onChange={e => setCreditRating(e.target.value)} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <button className="btn btn-secondary" style={{ width: '100%' }} onClick={handleRegister} disabled={regPending || regConfirming}>
-              <Building2 size={16} /> {regPending ? 'Signing...' : regConfirming ? 'Confirming...' : 'Register EOA Anchor'}
+              <Building2 size={16} /> {regPending ? 'Signing...' : regConfirming ? 'Confirming...' : 'Register Buyer Account'}
             </button>
             {!progWallet && (
               <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleDeployProgrammatic}>
-                <Bot size={16} /> Deploy Programmatic Wallet
+                <Bot size={16} /> Initialize Treasury Wallet
               </button>
             )}
           </div>
@@ -456,14 +495,14 @@ export default function AnchorView() {
               onClick={handleApproveUSDC} 
               disabled={approveUSDCPending || approveUSDCConfirming}
             >
-              {approveUSDCPending ? 'Signing Approval...' : approveUSDCConfirming ? 'Confirming Approval...' : '1. Approve USDC Spending'}
+              {approveUSDCPending ? 'Signing Payout...' : approveUSDCConfirming ? 'Confirming Payout...' : '1. Authorize Payout Funds'}
             </button>
           )}
 
           {settleStep === 'approved_usdc' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ fontSize: 12, color: 'var(--ff-success)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <CheckCircle size={14} /> USDC Spending Approved!
+                <CheckCircle size={14} /> Payout Funds Authorized!
               </div>
               <button 
                 className="btn btn-success" 
@@ -471,7 +510,7 @@ export default function AnchorView() {
                 onClick={handleSettleInvoice} 
                 disabled={stPending || stConfirming}
               >
-                {stPending ? 'Signing Settlement...' : stConfirming ? 'Confirming Settlement...' : '2. Execute Settlement'}
+                {stPending ? 'Signing Settlement...' : stConfirming ? 'Confirming Settlement...' : '2. Confirm Supplier Settlement'}
               </button>
               <button 
                 className="btn btn-secondary" 

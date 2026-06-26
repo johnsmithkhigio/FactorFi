@@ -424,41 +424,110 @@ export default function BridgeView() {
         </p>
 
         {cachedTransfers.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {cachedTransfers.map(tx => (
-              <div 
-                key={tx.id} 
-                style={{ 
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
-                  padding: 12, background: 'var(--ff-bg)', borderRadius: 8, border: '1px solid var(--ff-border)' 
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700 }}>{tx.amount} USDC</span>
-                    <span style={{ fontSize: 10, color: 'var(--ff-text-muted)' }}>from {tx.sourceChain}</span>
-                    <span className={`badge ${tx.status === 'completed' ? 'badge-settled' : 'badge-funded'}`} style={{ fontSize: 9, padding: '1px 6px' }}>
-                      {tx.status}
-                    </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {cachedTransfers.map(tx => {
+              const isCompleted = tx.status === 'completed'
+              const currentStepIndex = isCompleted ? 4 : (tx.attestationSignature ? 3 : 2)
+
+              return (
+                <div 
+                  key={tx.id} 
+                  style={{ 
+                    display: 'flex', flexDirection: 'column', gap: 14,
+                    padding: 16, background: 'var(--ff-bg)', borderRadius: 8, border: '1px solid var(--ff-border)' 
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ff-text)' }}>{tx.amount} USDC</span>
+                      <span style={{ fontSize: 10, color: 'var(--ff-text-muted)' }}>from {tx.sourceChain}</span>
+                      <span className={`badge ${isCompleted ? 'badge-settled' : 'badge-funded'}`} style={{ fontSize: 9, padding: '1px 6px' }}>
+                        {tx.status}
+                      </span>
+                    </div>
+
+                    {!isCompleted && (
+                      <button 
+                        onClick={() => handleResumeTransfer(tx)}
+                        disabled={resumingId === tx.id}
+                        className="btn btn-secondary" 
+                        style={{ fontSize: 11, padding: '5px 12px', height: 28, display: 'flex', alignItems: 'center', gap: 4 }}
+                      >
+                        <RefreshCw size={11} className={resumingId === tx.id ? 'spin' : ''} />
+                        {resumingId === tx.id ? 'Recovering...' : 'Resume Bridge Pipeline'}
+                      </button>
+                    )}
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--ff-text-muted)', fontFamily: 'var(--ff-mono)' }}>
-                    Burn Tx: {tx.burnTxHash ? `${tx.burnTxHash.slice(0, 20)}...` : 'not generated yet'}
+
+                  {/* Horizontal Timeline Steps */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', padding: '10px 0' }}>
+                    {/* Connecting Line background */}
+                    <div style={{
+                      position: 'absolute', top: '22px', left: '5%', right: '5%', height: 2,
+                      background: 'rgba(255, 255, 255, 0.05)', zIndex: 1
+                    }} />
+                    {/* Active Line background */}
+                    <div style={{
+                      position: 'absolute', top: '22px', left: '5%',
+                      width: `${(currentStepIndex - 1) * 30}%`, height: 2,
+                      background: 'linear-gradient(90deg, var(--ff-primary), var(--ff-success))', zIndex: 2,
+                      transition: 'all 0.3s'
+                    }} />
+
+                    {[
+                      { step: 1, label: 'Approve', desc: 'USDC Spent' },
+                      { step: 2, label: 'Burn', desc: tx.burnTxHash ? 'Burn Confirmed' : 'Burning' },
+                      { step: 3, label: 'Attestation', desc: tx.attestationSignature ? 'Verified' : 'Polling IRIS' },
+                      { step: 4, label: 'Mint', desc: isCompleted ? 'USDC Minted' : 'Pending Mint' }
+                    ].map((stepObj) => {
+                      const done = currentStepIndex >= stepObj.step
+                      const active = currentStepIndex + 1 === stepObj.step && resumingId === tx.id
+
+                      return (
+                        <div key={stepObj.step} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 3, width: '22%', textAlign: 'center' }}>
+                          <div style={{
+                            width: 24, height: 24, borderRadius: '50%',
+                            background: done ? 'var(--ff-success)' : active ? 'var(--ff-primary)' : 'var(--ff-surface)',
+                            border: `2px solid ${done ? 'var(--ff-success)' : active ? 'var(--ff-primary)' : 'var(--ff-border)'}`,
+                            color: done || active ? '#000' : 'var(--ff-text-muted)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 10, fontWeight: 700, marginBottom: 6,
+                            boxShadow: done ? '0 0 10px rgba(16, 185, 129, 0.2)' : active ? '0 0 10px rgba(56, 189, 248, 0.2)' : 'none'
+                          }}>
+                            {done ? '✓' : stepObj.step}
+                          </div>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: done || active ? '#fff' : 'var(--ff-text-secondary)' }}>{stepObj.label}</span>
+                          <span style={{ fontSize: 9, color: 'var(--ff-text-muted)', marginTop: 2 }}>{stepObj.desc}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Transaction Metadata & Action Links */}
+                  <div style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    background: 'rgba(255,255,255,0.01)', padding: '8px 12px', borderRadius: 6,
+                    border: '1px solid var(--ff-border-subtle)', fontSize: 10.5, fontFamily: 'var(--ff-mono)'
+                  }}>
+                    <span style={{ color: 'var(--ff-text-muted)' }}>
+                      Burn Hash: <span style={{ color: 'var(--ff-text)' }}>{tx.burnTxHash.slice(0, 10)}...{tx.burnTxHash.slice(-8)}</span>
+                    </span>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <a 
+                        href={`https://testnet.arcscan.app/tx/${tx.burnTxHash}`} 
+                        target="_blank" rel="noopener noreferrer" 
+                        style={{ color: 'var(--ff-primary)', display: 'inline-flex', alignItems: 'center', gap: 3, textDecoration: 'underline' }}
+                      >
+                        Source Tx <ExternalLink size={10} />
+                      </a>
+                      {tx.attestationSignature && (
+                        <span style={{ color: 'var(--ff-success)' }}>Attestation Cached</span>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                {tx.status !== 'completed' && (
-                  <button 
-                    onClick={() => handleResumeTransfer(tx)}
-                    disabled={resumingId === tx.id}
-                    className="btn btn-secondary" 
-                    style={{ fontSize: 11, padding: '5px 12px', height: 28, display: 'flex', alignItems: 'center', gap: 4 }}
-                  >
-                    <RefreshCw size={11} className={resumingId === tx.id ? 'spin' : ''} />
-                    {resumingId === tx.id ? 'Resuming...' : 'Resume Attestation / Mint'}
-                  </button>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--ff-text-muted)', background: 'var(--ff-bg)', borderRadius: 8, border: '1px dashed var(--ff-border)' }}>

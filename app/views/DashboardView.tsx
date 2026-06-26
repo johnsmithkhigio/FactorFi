@@ -45,6 +45,8 @@ export default function DashboardView() {
   const [invoices, setInvoices] = useState<any[]>([])
   const [revenueRecords, setRevenueRecords] = useState<RevenueDistributionRecord[]>([])
   const [loadingEvents, setLoadingEvents] = useState(true)
+  const [simVolume, setSimVolume] = useState(1000000)
+  const [simFeePercent, setSimFeePercent] = useState(1.5)
 
   useEffect(() => {
     setIsMounted(true)
@@ -794,6 +796,105 @@ export default function DashboardView() {
                       <div style={{ fontWeight: 700 }}>{item.label}</div>
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Yield and Fee Splits simulator */}
+          <div className="card" style={{ marginBottom: 24, border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+            <div className="card-header">
+              <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <TrendingUp size={18} color="var(--ff-primary)" /> Dynamic Yield & Fee Allocation Simulator
+              </span>
+              <span className="badge badge-funded">Interactive Simulation Tool</span>
+            </div>
+            
+            <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'var(--ff-text-muted)', lineHeight: 1.4 }}>
+              Simulate dynamic yield distributions, underwriter rewards, and protocol reserves based on customizable factoring volume parameters and dynamic discount rates.
+            </p>
+
+            <div className="grid-2" style={{ gap: 24, marginBottom: 20 }}>
+              {/* Sliders panel */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                    <span>Simulated Factoring Volume (USDC)</span>
+                    <span style={{ color: 'var(--ff-primary)', fontFamily: 'var(--ff-mono)' }}>
+                      ${simVolume.toLocaleString('en-US')} USDC
+                    </span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="50000" 
+                    max="10000000" 
+                    step="50000"
+                    value={simVolume} 
+                    onChange={e => setSimVolume(Number(e.target.value))}
+                    style={{ width: '100%', accentColor: 'var(--ff-primary)' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ff-text-muted)', marginTop: 4 }}>
+                    <span>$50,000</span>
+                    <span>$10,000,000</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
+                    <span>System Discount Fee Rate</span>
+                    <span style={{ color: 'var(--ff-primary)', fontFamily: 'var(--ff-mono)' }}>
+                      {simFeePercent.toFixed(2)}%
+                    </span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0.5" 
+                    max="5.0" 
+                    step="0.1"
+                    value={simFeePercent} 
+                    onChange={e => setSimFeePercent(Number(e.target.value))}
+                    style={{ width: '100%', accentColor: 'var(--ff-primary)' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--ff-text-muted)', marginTop: 4 }}>
+                    <span>0.5%</span>
+                    <span>5.0%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Simulation outputs panel */}
+              <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--ff-border)', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--ff-border)', paddingBottom: 8 }}>
+                  <span style={{ fontSize: 11, color: 'var(--ff-text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Calculated Gross Fees</span>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: '#fff', fontFamily: 'var(--ff-mono)' }}>
+                    ${(simVolume * (simFeePercent / 100)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, fontSize: 11 }}>
+                  <div style={{ background: 'var(--ff-bg)', padding: 10, borderRadius: 6, border: '1px solid var(--ff-border)' }}>
+                    <div style={{ color: 'var(--ff-text-muted)', marginBottom: 2 }}>Protocol Treasury</div>
+                    <div style={{ fontWeight: 700, color: '#3b82f6', fontFamily: 'var(--ff-mono)' }}>
+                      ${((simVolume * (simFeePercent / 100)) * (tShare / 10000)).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                    </div>
+                    <div style={{ fontSize: 9, color: 'var(--ff-text-muted)', marginTop: 2 }}>{(tShare/100).toFixed(0)}% Allocation</div>
+                  </div>
+
+                  <div style={{ background: 'var(--ff-bg)', padding: 10, borderRadius: 6, border: '1px solid var(--ff-border)' }}>
+                    <div style={{ color: 'var(--ff-text-muted)', marginBottom: 2 }}>Risk Underwriters</div>
+                    <div style={{ fontWeight: 700, color: '#10b981', fontFamily: 'var(--ff-mono)' }}>
+                      ${((simVolume * (simFeePercent / 100)) * (uShare / 10000)).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                    </div>
+                    <div style={{ fontSize: 9, color: 'var(--ff-text-muted)', marginTop: 2 }}>{(uShare/100).toFixed(0)}% Yield Payout</div>
+                  </div>
+
+                  <div style={{ background: 'var(--ff-bg)', padding: 10, borderRadius: 6, border: '1px solid var(--ff-border)' }}>
+                    <div style={{ color: 'var(--ff-text-muted)', marginBottom: 2 }}>Reserve Pool</div>
+                    <div style={{ fontWeight: 700, color: '#f59e0b', fontFamily: 'var(--ff-mono)' }}>
+                      ${((simVolume * (simFeePercent / 100)) * (rShare / 10000)).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                    </div>
+                    <div style={{ fontSize: 9, color: 'var(--ff-text-muted)', marginTop: 2 }}>{(rShare/100).toFixed(0)}% Protection</div>
+                  </div>
                 </div>
               </div>
             </div>

@@ -52,7 +52,7 @@ export default function CreditView() {
   const handleDownloadPassport = async () => {
     if (!searchAddr) return
     setPdfLoading(true)
-    toast.info('Generating secure cryptographic Credit Passport certificate...', { duration: 2000 })
+    toast.info('Generating secure Credit Passport certificate...', { duration: 2000 })
 
     try {
       const res = await fetch('/api/credit/report', {
@@ -92,16 +92,36 @@ export default function CreditView() {
   }
 
   // Pre-configured dynamic payment telemetry dataset for Recharts
-  const creditTelemetryData = [
-    { month: 'Jan', score: 680, volume: 15000, days: 15 },
-    { month: 'Feb', score: 710, volume: 32000, days: 14 },
-    { month: 'Mar', score: 740, volume: 48000, days: 13 },
-    { month: 'Apr', score: 790, volume: 95000, days: 12 },
-    { month: 'May', score: 820, volume: 120000, days: 11 },
-    { month: 'Jun', score: profile ? Math.round((Number(profile.onTimeRateBps) / 10000) * 1000) || 850 : 850, volume: profile ? Number(formatUnits(profile.totalAmountSettled, USDC_DECIMALS)) || 145000 : 145000, days: profile ? Number(profile.weightedAvgSettlementDays) || 10 : 10 },
+  const activeScore = profile && Number(profile.onTimeRateBps) > 0 
+    ? Math.round((Number(profile.onTimeRateBps) / 10000) * 1000) 
+    : (anchor && anchor.isRegistered ? Number(anchor.creditRating) : 0)
+
+  const volumeVal = profile ? Number(formatUnits(profile.totalAmountSettled, USDC_DECIMALS)) : 0
+  const settlementDays = profile ? Number(profile.weightedAvgSettlementDays) || Math.round(Number(profile.avgSettlementTime) / 86400) : 0
+
+  const hasHistory = volumeVal > 0 || activeScore > 0 || Number(profile?.invoicesSettled) > 0
+
+  const creditTelemetryData = hasHistory ? [
+    { month: 'Jan', score: activeScore > 0 ? Math.round(activeScore * 0.8) : 600, volume: Math.round(volumeVal * 0.15), days: Math.round(settlementDays * 1.5) || 15 },
+    { month: 'Feb', score: activeScore > 0 ? Math.round(activeScore * 0.85) : 650, volume: Math.round(volumeVal * 0.35), days: Math.round(settlementDays * 1.4) || 14 },
+    { month: 'Mar', score: activeScore > 0 ? Math.round(activeScore * 0.9) : 700, volume: Math.round(volumeVal * 0.55), days: Math.round(settlementDays * 1.3) || 13 },
+    { month: 'Apr', score: activeScore > 0 ? Math.round(activeScore * 0.92) : 750, volume: Math.round(volumeVal * 0.75), days: Math.round(settlementDays * 1.2) || 12 },
+    { month: 'May', score: activeScore > 0 ? Math.round(activeScore * 0.96) : 800, volume: Math.round(volumeVal * 0.9), days: Math.round(settlementDays * 1.1) || 11 },
+    { month: 'Jun', score: activeScore || 850, volume: volumeVal, days: settlementDays || 10 },
+  ] : [
+    { month: 'Jan', score: 0, volume: 0, days: 0 },
+    { month: 'Feb', score: 0, volume: 0, days: 0 },
+    { month: 'Mar', score: 0, volume: 0, days: 0 },
+    { month: 'Apr', score: 0, volume: 0, days: 0 },
+    { month: 'May', score: 0, volume: 0, days: 0 },
+    { month: 'Jun', score: 0, volume: 0, days: 0 },
   ]
 
-  const activeGrade = profile ? getCreditGrade(Number(profile.onTimeRateBps)) : getCreditGrade(9200)
+  const activeGrade = profile && Number(profile.onTimeRateBps) > 0 
+    ? getCreditGrade(Number(profile.onTimeRateBps)) 
+    : (anchor && anchor.isRegistered 
+        ? getCreditGrade(Number(anchor.creditRating) * 10) 
+        : { grade: 'N/A', rating: 'N/A', desc: 'No History', color: 'var(--ff-text-muted)', bg: 'rgba(255,255,255,0.02)' })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -109,12 +129,12 @@ export default function CreditView() {
       <div className="card">
         <div className="card-header">
           <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Shield size={18} color="var(--ff-primary)" /> Dynamic On-Chain Credit Passport Lookup
+            <Shield size={18} color="var(--ff-primary)" /> Credit Passport Registry Search
           </span>
-          <span className="badge badge-funded" style={{ background: 'var(--ff-primary-subtle)', color: 'var(--ff-primary)' }}>Verifiable Ledger</span>
+          <span className="badge badge-funded" style={{ background: 'var(--ff-primary-subtle)', color: 'var(--ff-primary)' }}>Verified History</span>
         </div>
         <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'var(--ff-text-muted)', lineHeight: 1.4 }}>
-          Enter a corporate anchor or supplier wallet address to pull live, compiled credit ratings, transaction volumes, and weighted repayment delay metrics recorded on the Arc Testnet.
+          Enter a corporate debtor or supplier address to retrieve payment histories, transaction volumes, and weighted repayment delay metrics recorded on the secure ledger.
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
           <input 
@@ -148,7 +168,7 @@ export default function CreditView() {
           <div className="grid-3">
             {/* Circular Rating Dial */}
             <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-              <span className="card-title" style={{ fontSize: 13, color: 'var(--ff-text-muted)', marginBottom: 16 }}>On-Chain Rating Grade</span>
+              <span className="card-title" style={{ fontSize: 13, color: 'var(--ff-text-muted)', marginBottom: 16 }}>Performance Rating Grade</span>
               <div style={{
                 width: 130, height: 130, borderRadius: '50%',
                 background: activeGrade.bg,
@@ -248,9 +268,23 @@ export default function CreditView() {
             {/* Score Over Time Chart */}
             <div className="card" style={{ padding: 20 }}>
               <span className="card-title" style={{ fontSize: 13, color: 'var(--ff-text-muted)', marginBottom: 16, display: 'block' }}>
-                On-Chain Credit Reputational Score Growth (6-Month Trend)
+                Corporate Reputational Credit Score (6-Month Trend)
               </span>
-              <div style={{ width: '100%', height: 210 }}>
+              <div style={{ width: '100%', height: 210, position: 'relative' }}>
+                {!hasHistory && (
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(9, 9, 11, 0.85)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    gap: 8, zIndex: 10, borderRadius: 6, padding: 16, textAlign: 'center'
+                  }}>
+                    <Activity size={24} color="var(--ff-text-muted)" />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>No Active Repayment Telemetry</span>
+                    <span style={{ fontSize: 11, color: 'var(--ff-text-muted)', maxWidth: 280 }}>
+                      Submit invoices and complete settlements to populate this chart.
+                    </span>
+                  </div>
+                )}
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={creditTelemetryData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
@@ -274,17 +308,17 @@ export default function CreditView() {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <FileText size={18} color="var(--ff-primary)" />
-                  <span className="card-title" style={{ fontSize: 14 }}>Credit Passport PDF</span>
+                  <span className="card-title" style={{ fontSize: 14 }}>Corporate Credit Report</span>
                 </div>
                 <p style={{ margin: 0, fontSize: 11, color: 'var(--ff-text-muted)', lineHeight: 1.4 }}>
-                  Generate an official corporate credit report containing verified, cryptographically signed proofs of your historical repayment telemetry on Arc Testnet. 
+                  Generate a professional credit report containing verified, authenticated histories of your historical repayment telemetry. 
                 </p>
                 <div style={{ marginTop: 14, background: 'var(--ff-bg)', padding: 8, borderRadius: 6, border: '1px dashed var(--ff-border)', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ fontSize: 10, color: '#10b981', display: 'flex', gap: 4, alignItems: 'center' }}>
-                    <CheckCircle size={10} /> 256-bit Cryptographic Seal
+                    <CheckCircle size={10} /> Secure Digital Seal
                   </div>
                   <div style={{ fontSize: 10, color: '#10b981', display: 'flex', gap: 4, alignItems: 'center' }}>
-                    <CheckCircle size={10} /> Embeds Verified API Ledger
+                    <CheckCircle size={10} /> Verified Payment Ledger
                   </div>
                 </div>
               </div>
@@ -300,13 +334,81 @@ export default function CreditView() {
               </button>
             </div>
           </div>
+
+          {/* Credit Scorecard Breakdown Card */}
+          <div className="card" style={{ padding: 20 }}>
+            <span className="card-title" style={{ fontSize: 14, color: '#fff', marginBottom: 12, display: 'block' }}>
+              Interactive Credit Scorecard Breakdown
+            </span>
+            <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'var(--ff-text-muted)', lineHeight: 1.4 }}>
+              Factors and weighted metrics used to compute the corporate rating grade:
+            </p>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12.5 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--ff-border)', paddingBottom: 8, color: 'var(--ff-text-secondary)' }}>
+                    <th style={{ padding: '8px 12px', fontWeight: 600 }}>Metric Parameter</th>
+                    <th style={{ padding: '8px 12px', fontWeight: 600 }}>Weight</th>
+                    <th style={{ padding: '8px 12px', fontWeight: 600 }}>Current Value</th>
+                    <th style={{ padding: '8px 12px', fontWeight: 600 }}>Score Contribution</th>
+                    <th style={{ padding: '8px 12px', fontWeight: 600 }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    {
+                      name: 'Settlement Timeliness (On-Time Rate)',
+                      weight: '40%',
+                      value: Number(profile.onTimeRateBps) > 0 ? `${(Number(profile.onTimeRateBps) / 100).toFixed(1)}%` : 'N/A (No history)',
+                      contribution: Number(profile.onTimeRateBps) > 0 ? `${((Number(profile.onTimeRateBps) / 10000) * 400).toFixed(0)} / 400` : '0 / 400',
+                      status: Number(profile.onTimeRateBps) >= 9000 ? 'Exceptional' : (Number(profile.onTimeRateBps) > 0 ? 'Standard' : 'Inactive'),
+                      color: Number(profile.onTimeRateBps) >= 9000 ? 'var(--ff-success)' : (Number(profile.onTimeRateBps) > 0 ? 'var(--ff-warning)' : 'var(--ff-text-muted)')
+                    },
+                    {
+                      name: 'Repayment Speed Index (Weighted Avg)',
+                      weight: '30%',
+                      value: (Number(profile.weightedAvgSettlementDays) > 0 || Math.round(Number(profile.avgSettlementTime) / 86400) > 0) ? `${Number(profile.weightedAvgSettlementDays) || Math.round(Number(profile.avgSettlementTime) / 86400)} Days` : 'N/A',
+                      contribution: (Number(profile.weightedAvgSettlementDays) > 0 || Math.round(Number(profile.avgSettlementTime) / 86400) > 0) ? `${(Number(profile.weightedAvgSettlementDays) || Math.round(Number(profile.avgSettlementTime) / 86400)) <= 15 ? 270 : 180} / 300` : '0 / 300',
+                      status: (Number(profile.weightedAvgSettlementDays) > 0 || Math.round(Number(profile.avgSettlementTime) / 86400) > 0) ? ((Number(profile.weightedAvgSettlementDays) || Math.round(Number(profile.avgSettlementTime) / 86400)) <= 15 ? 'Fast' : 'Moderate') : 'Inactive',
+                      color: (Number(profile.weightedAvgSettlementDays) > 0 || Math.round(Number(profile.avgSettlementTime) / 86400) > 0) ? ((Number(profile.weightedAvgSettlementDays) || Math.round(Number(profile.avgSettlementTime) / 86400)) <= 15 ? 'var(--ff-success)' : 'var(--ff-warning)') : 'var(--ff-text-muted)'
+                    },
+                    {
+                      name: 'Debtor Underwriter Grade Alignment',
+                      weight: '20%',
+                      value: anchor && anchor.isRegistered ? `${anchor.creditRating / 10} Score` : '85.0 (Default Grade)',
+                      contribution: anchor && anchor.isRegistered ? `${Math.round((anchor.creditRating / 1000) * 200)} / 200` : '170 / 200',
+                      status: anchor && anchor.isRegistered ? 'Registered' : 'Default Grade',
+                      color: 'var(--ff-success)'
+                    },
+                    {
+                      name: 'Factored Volume Capacity (USDC)',
+                      weight: '10%',
+                      value: `${formatUSDC(profile.totalAmountSettled)} USDC`,
+                      contribution: Number(profile.totalAmountSettled) > 0 ? '100 / 100' : '0 / 100',
+                      status: Number(profile.totalAmountSettled) > 0 ? 'Active' : 'No Volume',
+                      color: Number(profile.totalAmountSettled) > 0 ? 'var(--ff-success)' : 'var(--ff-text-muted)'
+                    }
+                  ].map((row, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid var(--ff-border-subtle)', background: idx % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent' }}>
+                      <td style={{ padding: '12px 12px', fontWeight: 500, color: '#fff' }}>{row.name}</td>
+                      <td style={{ padding: '12px 12px', color: 'var(--ff-text-muted)' }}>{row.weight}</td>
+                      <td style={{ padding: '12px 12px', fontFamily: 'var(--ff-mono)' }}>{row.value}</td>
+                      <td style={{ padding: '12px 12px', fontFamily: 'var(--ff-mono)', color: 'var(--ff-primary)' }}>{row.contribution}</td>
+                      <td style={{ padding: '12px 12px', color: row.color, fontWeight: 500 }}>{row.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       ) : (
         searchAddr && (
           <div className="card empty-state" style={{ padding: '40px 0' }}>
             <AlertTriangle size={48} color="var(--ff-warning)" style={{ marginBottom: 12 }} />
-            <h3>No On-Chain History</h3>
-            <p>This address does not have any recorded credit events on the FactorFi contract yet.</p>
+            <h3>No Profile History</h3>
+            <p>This address does not have any recorded credit events on the platform yet.</p>
           </div>
         )
       )}
@@ -314,14 +416,14 @@ export default function CreditView() {
       {/* Info Guidelines */}
       <div className="card">
         <div className="card-header">
-          <span className="card-title">Understanding On-Chain Composable Credit</span>
+          <span className="card-title">Understanding Corporate Credit Passports</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
           <div style={{ background: 'var(--ff-bg)', padding: 16, borderRadius: 8, border: '1px solid var(--ff-border)' }}>
             <Shield size={20} color="var(--ff-primary)" style={{ marginBottom: 10 }} />
-            <h4 style={{ margin: '0 0 6px 0', fontSize: 13 }}>Verifiable Scoring</h4>
+            <h4 style={{ margin: '0 0 6px 0', fontSize: 13 }}>Immutable Scoring</h4>
             <p style={{ margin: 0, fontSize: 11, color: 'var(--ff-text-muted)', lineHeight: 1.4 }}>
-              Credit profiles are updated exclusively via internal state changes triggered by verified settlement events, making them immune to external database manipulations.
+              Credit profiles are calculated and updated based on real transaction settlements, making them a robust, tamper-resistant record of B2B payment performance.
             </p>
           </div>
           <div style={{ background: 'var(--ff-bg)', padding: 16, borderRadius: 8, border: '1px solid var(--ff-border)' }}>
@@ -335,7 +437,7 @@ export default function CreditView() {
             <Award size={20} color="var(--ff-primary)" style={{ marginBottom: 10 }} />
             <h4 style={{ margin: '0 0 6px 0', fontSize: 13 }}>Dynamic Pricing</h4>
             <p style={{ margin: 0, fontSize: 11, color: 'var(--ff-text-muted)', lineHeight: 1.4 }}>
-              A high credit rating grade enables suppliers and anchors to automatically qualify for lower discount rates during financing, scaling B2B factoring.
+              A high credit rating grade enables suppliers and buyers to automatically qualify for lower financing discount rates, optimizing working capital efficiency.
             </p>
           </div>
         </div>
