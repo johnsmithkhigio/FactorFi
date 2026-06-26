@@ -5,10 +5,10 @@ export const USDC_ADDRESS_ARC = '0x3600000000000000000000000000000000000000' as 
 export const EURC_ADDRESS_ARC = '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a' as const;
 
 // Deployed on Arc Testnet — Tx: 0x89a70c6b0532983faa77cd536d514ff6e7f8e02fa9ada85f0d41dc57c37a93aa
-export const FACTORFI_CONTRACT_ADDRESS = '0xf3aceefa36e2c8a501eaef9b44df8859159800ed' as const;
-export const AUTO_FACTOR_VAULT_ADDRESS = '0x4d6b491c0407b8bd9f4f2128034ec2285bfb3e63' as const;
-export const INVOICE_RECEIPT_NFT_ADDRESS = '0xf0c354e9ead55ed1878b03300e3861b56c6c1301' as const;
-export const FACTORFI_MARKETPLACE_ADDRESS = '0xc8af8a35d41748115d507ff3fdb3f8a0d3a970b9' as const;
+export const FACTORFI_CONTRACT_ADDRESS = '0xb13d6ce28f2318a7a9a7b2ca51e7aa6e8f257f61' as const;
+export const AUTO_FACTOR_VAULT_ADDRESS = '0x424c45ef82a0c0cc87d03bba812494529afd2e34' as const;
+export const INVOICE_RECEIPT_NFT_ADDRESS = '0xa0d152c6519c5d616d9b21b76403a2c60fdb2ca9' as const;
+export const FACTORFI_MARKETPLACE_ADDRESS = '0xa43f581b556907b665c16f470923a9c56faf64e8' as const;
 
 export const USDC_DECIMALS = 6;
 
@@ -305,6 +305,27 @@ export const factorFiAbi = [
     name: 'isCompliant',
     outputs: [{ name: '', type: 'bool' }],
     stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: '_user', type: 'address' },
+      { name: '_status', type: 'bool' }
+    ],
+    name: 'updateComplianceStatus',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: '_anchor', type: 'address' },
+      { name: '_name', type: 'string' },
+      { name: '_creditRating', type: 'uint256' }
+    ],
+    name: 'registerAnchorOnBehalf',
+    outputs: [],
+    stateMutability: 'nonpayable',
     type: 'function',
   },
   {
