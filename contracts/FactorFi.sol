@@ -502,6 +502,22 @@ contract FactorFi is IRevenueDistributor {
         emit ComplianceStatusUpdated(_user, _status);
     }
 
+    function registerAnchorOnBehalf(address _anchor, string calldata _name, uint256 _creditRating) external {
+        require(msg.sender == owner, "Not owner");
+        require(!anchors[_anchor].isRegistered, "Already registered");
+        require(_creditRating <= 1000, "Rating 0-1000");
+
+        anchors[_anchor] = Anchor({
+            name: _name,
+            creditRating: _creditRating,
+            totalApproved: 0,
+            totalSettled: 0,
+            isRegistered: true
+        });
+
+        emit AnchorRegistered(_anchor, _name, _creditRating);
+    }
+
     function setComplianceSigner(address _signer) external {
         require(msg.sender == owner, "Not owner");
         complianceSigner = _signer;
