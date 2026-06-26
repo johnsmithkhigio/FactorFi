@@ -387,17 +387,33 @@ export default function InvestorView() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label" style={{ fontSize: 11 }}>Deposit USDC</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <label className="form-label" style={{ margin: 0, fontSize: 11 }}>Deposit USDC</label>
+                <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 10 }}>
+                  ⓘ
+                  <span className="tooltip-content">
+                    Specify the amount of USDC stablecoins to deposit into the Auto-Invest Vault.
+                  </span>
+                </div>
+              </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <input className="form-input" type="number" placeholder="100" value={vaultDepositInput} onChange={e => setVaultDepositInput(e.target.value)} />
+                <input className="form-input" type="number" placeholder="e.g. 500" value={vaultDepositInput} onChange={e => setVaultDepositInput(e.target.value)} />
                 <button className="btn btn-primary" onClick={handleVaultDeposit} disabled={vaultPending || approvePending}>Deposit</button>
               </div>
             </div>
 
             <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label" style={{ fontSize: 11 }}>Withdraw USDC</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <label className="form-label" style={{ margin: 0, fontSize: 11 }}>Withdraw USDC</label>
+                <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 10 }}>
+                  ⓘ
+                  <span className="tooltip-content">
+                    Specify the amount of USDC stablecoins to withdraw from the Auto-Invest Vault.
+                  </span>
+                </div>
+              </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <input className="form-input" type="number" placeholder="100" value={vaultWithdrawInput} onChange={e => setVaultWithdrawInput(e.target.value)} />
+                <input className="form-input" type="number" placeholder="e.g. 200" value={vaultWithdrawInput} onChange={e => setVaultWithdrawInput(e.target.value)} />
                 <button className="btn btn-secondary" onClick={handleVaultWithdraw} disabled={vaultPending}>Withdraw</button>
               </div>
             </div>
@@ -431,9 +447,17 @@ export default function InvestorView() {
         <div className="card">
           <div className="card-header"><span className="card-title">Direct Invoice Sponsoring (Manual Flow)</span></div>
           <div className="form-group">
-            <label className="form-label">Invoice ID</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Invoice ID</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  Enter a unique Invoice ID to lookup its status and details for direct manual funding.
+                </span>
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <input className="form-input" type="number" placeholder="0" value={lookupId} onChange={e => { setLookupId(e.target.value); setInvoiceId(e.target.value) }} />
+              <input className="form-input" type="number" placeholder="e.g. 42" value={lookupId} onChange={e => { setLookupId(e.target.value); setInvoiceId(e.target.value) }} />
               <button className="btn btn-secondary" onClick={() => refetchInvoice()}>Lookup</button>
             </div>
           </div>
@@ -463,8 +487,16 @@ export default function InvestorView() {
               </div>
 
               <div className="form-group" style={{ marginTop: 8 }}>
-                <label className="form-label">Discount (basis points) — your profit margin</label>
-                <input className="form-input" type="number" placeholder="300" value={discountBps} onChange={e => setDiscountBps(e.target.value)} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <label className="form-label" style={{ margin: 0 }}>Discount (basis points) — your profit margin</label>
+                  <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                    ⓘ
+                    <span className="tooltip-content">
+                      The discount rate in basis points (100 bps = 1.00% yield profit) you require for funding this invoice.
+                    </span>
+                  </div>
+                </div>
+                <input className="form-input" type="number" placeholder="e.g. 350" value={discountBps} onChange={e => setDiscountBps(e.target.value)} />
               </div>
 
               {Number(discountBps) > 0 && (
@@ -509,13 +541,29 @@ export default function InvestorView() {
           </p>
 
           <div className="form-group">
-            <label className="form-label">Minimum Discount margin (%)</label>
-            <input className="form-input" type="number" step="0.1" value={minDiscountForm} onChange={e => setMinDiscountForm(e.target.value)} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Minimum Discount margin (%)</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  The minimum yield discount rate required by the auto-invest vault to fund an invoice.
+                </span>
+              </div>
+            </div>
+            <input className="form-input" type="number" step="0.1" placeholder="e.g. 2.5" value={minDiscountForm} onChange={e => setMinDiscountForm(e.target.value)} />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Minimum Debtor Credit Score (0-1000)</label>
-            <input className="form-input" type="number" value={minScoreForm} onChange={e => setMinScoreForm(e.target.value)} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Minimum Debtor Credit Score (0-1000)</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  The minimum credit score of the debtor required by the auto-invest vault to authorize funding.
+                </span>
+              </div>
+            </div>
+            <input className="form-input" type="number" placeholder="e.g. 850" value={minScoreForm} onChange={e => setMinScoreForm(e.target.value)} />
           </div>
 
           <button className="btn btn-primary" style={{ marginTop: 8, width: '100%', gap: 6 }} onClick={() => toast.success('Keeper rules updated locally!')}>
@@ -576,9 +624,17 @@ export default function InvestorView() {
 
                     {nftOwnerData && (nftOwnerData as string).toLowerCase() === address?.toLowerCase() ? (
                       <div className="form-group" style={{ marginTop: 8, borderTop: '1px solid var(--ff-border)', paddingTop: 12 }}>
-                        <label className="form-label">Secondary Listing Price (USDC)</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <label className="form-label" style={{ margin: 0 }}>Secondary Listing Price (USDC)</label>
+                          <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                            ⓘ
+                            <span className="tooltip-content">
+                              Enter the OTC sale price in USDC for wrapping and transferring the invoice receipt NFT to another buyer.
+                            </span>
+                          </div>
+                        </div>
                         <div style={{ display: 'flex', gap: 8 }}>
-                          <input className="form-input" type="number" placeholder="9800" value={listPriceInput} onChange={e => setListPriceInput(e.target.value)} />
+                          <input className="form-input" type="number" placeholder="e.g. 9850" value={listPriceInput} onChange={e => setListPriceInput(e.target.value)} />
                           <button className="btn btn-primary" onClick={handleListInvoice} disabled={nftPending || marketPending}>
                             List Invoice
                           </button>
