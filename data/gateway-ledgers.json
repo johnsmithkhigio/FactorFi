@@ -1,6 +1,16 @@
 {
   "balances": {
-    "0x70997970c51812dc3a010c7d01b50e0d17dc79c8": 0.05
+    "0x70997970c51812dc3a010c7d01b50e0d17dc79c8": 0.05,
+    "0xdaf164e74b6b566d55fa2941911a33edb49ae6c5": 0.05
   },
-  "transactions": []
+  "transactions": [
+    {
+      "address": "0xdaf164e74b6b566d55fa2941911a33edb49ae6c5",
+      "type": "deposit",
+      "amount": 0.05,
+      "timestamp": 1782466008165,
+      "description": "Complimentary trial credits for AI Underwriting",
+      "txHash": "0xwelcomecredits"
+    }
+  ]
 }

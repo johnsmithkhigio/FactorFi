@@ -136,17 +136,28 @@ export default function CreditView() {
         <p style={{ margin: '0 0 16px 0', fontSize: 12, color: 'var(--ff-text-muted)', lineHeight: 1.4 }}>
           Enter a corporate debtor or supplier address to retrieve payment histories, transaction volumes, and weighted repayment delay metrics recorded on the secure ledger.
         </p>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <input 
-            className="form-input form-input-mono" 
-            placeholder="0x... Enter address to check credit history" 
-            value={lookupAddr} 
-            onChange={e => setLookupAddr(e.target.value)} 
-            style={{ flex: 1, height: 42, fontSize: 13 }} 
-          />
-          <button className="btn btn-primary" onClick={handleLookup} style={{ display: 'flex', alignItems: 'center', gap: 8, height: 42 }}>
-            <Search size={16} /> Lookup Passport
-          </button>
+        <div className="form-group" style={{ margin: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <label className="form-label" style={{ margin: 0 }}>Registry Search</label>
+            <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+              ⓘ
+              <span className="tooltip-content">
+                Enter a corporate debtor or supplier Ethereum address to view their payment registry, historical volumes, and credit passport.
+              </span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <input 
+              className="form-input form-input-mono" 
+              placeholder="e.g. 0x470f9ec27d1d8aecf15e57b149d70fd66aa295d6" 
+              value={lookupAddr} 
+              onChange={e => setLookupAddr(e.target.value)} 
+              style={{ flex: 1, height: 42, fontSize: 13 }} 
+            />
+            <button className="btn btn-primary" onClick={handleLookup} style={{ display: 'flex', alignItems: 'center', gap: 8, height: 42 }}>
+              <Search size={16} /> Lookup Passport
+            </button>
+          </div>
         </div>
         
         {/* Quick links to self profiles */}
