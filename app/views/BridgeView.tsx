@@ -278,7 +278,15 @@ export default function BridgeView() {
           </div>
 
           <div className="form-group" style={{ marginTop: 14 }}>
-            <label className="form-label">Source Chain</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Source Chain</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  Select the blockchain network where your source USDC is stored. Currently Sepolia testnets are supported.
+                </span>
+              </div>
+            </div>
             <select 
               className="form-input" 
               value={sourceChain} 
@@ -305,13 +313,21 @@ export default function BridgeView() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Amount (USDC)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <label className="form-label" style={{ margin: 0 }}>Amount (USDC)</label>
+              <div className="tooltip-trigger" style={{ cursor: 'help', color: 'var(--ff-primary)', fontSize: 11 }}>
+                ⓘ
+                <span className="tooltip-content">
+                  The amount of USDC you wish to bridge to Arc Testnet. Minimum transfer size is 0.1 USDC.
+                </span>
+              </div>
+            </div>
             <div style={{ position: 'relative' }}>
               <input 
                 className="form-input form-input-mono" 
                 type="number" 
                 step="0.01" 
-                placeholder="0.00" 
+                placeholder="e.g. 10.00" 
                 value={amount} 
                 onChange={e => setAmount(e.target.value)} 
                 disabled={isBridging}
