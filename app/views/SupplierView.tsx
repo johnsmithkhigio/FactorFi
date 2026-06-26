@@ -394,262 +394,173 @@ export default function SupplierView() {
         </div>
       )}
 
-      {/* OCR AI Scanner Dashboard Section */}
-      <div className="card" style={{ marginBottom: 24, border: '1px solid var(--ff-border)' }}>
-        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
+      {/* ═══ AI Document Intelligence Pipeline ═══ */}
+      <div className="card" style={{ marginBottom: 24, border: '1px solid var(--ff-border)', overflow: 'hidden' }}>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <BrainCircuit size={18} color="var(--ff-primary)" /> Automated Risk Analysis & PDF Invoice Import
+            <BrainCircuit size={18} color="var(--ff-primary)" /> AI Document Intelligence
           </span>
-          <span className="badge badge-approved">Automated Underwriting Active</span>
+          {agentRunning && <div className="ai-shimmer-bar" style={{ width: 80 }} />}
+          {agentComplete && <span className="ai-decision ai-decision--approved"><CheckCircle size={13} /> Approved</span>}
+          {!agentRunning && !agentComplete && <span className="badge badge-default" style={{ fontSize: 10 }}>Awaiting Upload</span>}
         </div>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', marginTop: 12, gap: 20 }}>
-          {/* File drag-drop input zone */}
-          <div 
-            data-tour="supply-finance"
-            style={{ 
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              border: '2px dashed var(--ff-border)', padding: 24, borderRadius: 8, cursor: 'pointer',
-              background: 'rgba(255,255,255,0.01)', transition: 'border-color 0.2s'
-            }}
-            onClick={triggerFileSelect}
-          >
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              style={{ display: 'none' }} 
-              accept="application/pdf"
-              onChange={onFileChange}
-            />
-            <UploadCloud size={36} color="var(--ff-primary)" style={{ marginBottom: 10 }} />
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ff-text)' }}>Import Corporate Invoice</div>
-            <div style={{ fontSize: 11, color: 'var(--ff-text-muted)', marginTop: 4 }}>Drag & drop standard PDF files or select simulated mocks below</div>
-            
-            <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                style={{ height: 26, fontSize: 10, padding: '0 8px' }}
-                onClick={(e) => { e.stopPropagation(); simulateSandboxUpload('apple') }}
-              >
-                Mock Apple Invoice
-              </button>
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                style={{ height: 26, fontSize: 10, padding: '0 8px' }}
-                onClick={(e) => { e.stopPropagation(); simulateSandboxUpload('tesla') }}
-              >
-                Mock Tesla Invoice
-              </button>
-            </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+          {/* LEFT: Upload + Pipeline Steps */}
+          <div style={{ padding: '20px 24px', borderRight: '1px solid var(--ff-border)' }}>
+            {!agentRunning && !agentComplete ? (
+              <div className="ai-dropzone" onClick={triggerFileSelect}>
+                <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept="application/pdf" onChange={onFileChange} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(56,189,248,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <UploadCloud size={22} color="var(--ff-primary)" />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ff-text)' }}>Import Invoice Document</div>
+                    <div style={{ fontSize: 11, color: 'var(--ff-text-muted)', marginTop: 2 }}>PDF up to 10MB — AI extracts all fields automatically</div>
+                  </div>
+                </div>
+                <div className="ai-caps">
+                  <div className="ai-cap-item"><Check size={11} /> OCR every page</div>
+                  <div className="ai-cap-item"><Check size={11} /> Detect invoice fields</div>
+                  <div className="ai-cap-item"><Check size={11} /> Verify supplier identity</div>
+                  <div className="ai-cap-item"><Check size={11} /> Cross-check treasury</div>
+                  <div className="ai-cap-item"><Check size={11} /> Calculate risk score</div>
+                  <div className="ai-cap-item"><Check size={11} /> Generate underwriting</div>
+                </div>
+                <div style={{ marginTop: 14, display: 'flex', gap: 8, borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: 12 }}>
+                  <button type="button" className="btn btn-sm btn-secondary" style={{ fontSize: 10 }} onClick={(e) => { e.stopPropagation(); simulateSandboxUpload('apple') }}>
+                    <FileText size={11} /> Apple Invoice
+                  </button>
+                  <button type="button" className="btn btn-sm btn-secondary" style={{ fontSize: 10 }} onClick={(e) => { e.stopPropagation(); simulateSandboxUpload('tesla') }}>
+                    <FileText size={11} /> Tesla Invoice
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="ai-file-thumb" style={{ marginBottom: 16 }}>
+                <div className="ai-file-icon"><FileText size={18} /></div>
+                <div className="ai-file-meta">
+                  <div className="ai-file-name">{description?.toLowerCase().includes('apple') ? 'apple_wafer_invoice.pdf' : 'tesla_powerwall_invoice.pdf'}</div>
+                  <div className="ai-file-size">{agentRunning ? 'Processing...' : 'Analysis complete'}</div>
+                </div>
+                {agentComplete && <CheckCircle size={16} color="var(--ff-success)" />}
+              </div>
+            )}
+
+            {(agentRunning || agentComplete) && (
+              <div className="ai-pipeline" style={{ marginTop: 4 }}>
+                {agentLogs.map((log, idx) => {
+                  const isLast = idx === agentLogs.length - 1
+                  const nodeClass = log.status === 'done' ? 'ai-step-node--done' : log.status === 'running' ? 'ai-step-node--active' : 'ai-step-node--pending'
+                  const connClass = log.status === 'done' ? 'ai-step-connector--done' : log.status === 'running' ? 'ai-step-connector--active' : ''
+                  return (
+                    <div className="ai-step" key={log.step} style={{ animationDelay: `${idx * 0.08}s` }}>
+                      <div className="ai-step-indicator">
+                        <div className={`ai-step-node ${nodeClass}`}>
+                          {log.status === 'done' ? <Check size={14} /> : log.status === 'running' ? <Bot size={14} /> : <span style={{ fontSize: 11 }}>{log.step}</span>}
+                        </div>
+                        {!isLast && <div className={`ai-step-connector ${connClass}`} />}
+                      </div>
+                      <div className="ai-step-body">
+                        <div className={`ai-step-title ${log.status === 'pending' ? 'ai-step-title--pending' : log.status === 'running' ? 'ai-step-title--active' : ''}`}>
+                          {log.message}
+                          {log.status === 'running' && (
+                            <span className="ai-thinking"><span className="ai-thinking-dot" /><span className="ai-thinking-dot" /><span className="ai-thinking-dot" /></span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Running progress logs */}
-          <div style={{ background: '#050505', border: '1px solid var(--ff-border)', borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ff-text-muted)', display: 'block', textTransform: 'uppercase', marginBottom: 12 }}>
-              Risk Assessment Activity Log
-            </span>
-            {agentRunning ? (
-              <div style={{ fontFamily: 'var(--ff-mono)', fontSize: 11, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {agentLogs.map((log) => (
-                  <div key={log.step} style={{ display: 'flex', gap: 8, color: log.status === 'done' ? 'var(--ff-success)' : log.status === 'running' ? 'var(--ff-primary)' : '#444' }}>
-                    <span>{log.status === 'done' ? '✓' : log.status === 'running' ? '●' : '○'}</span>
-                    <span>{log.message}</span>
-                  </div>
-                ))}
-              </div>
-            ) : agentComplete ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ff-success)', fontSize: 12, fontWeight: 700 }}>
-                  <CheckCircle size={14} /> Risk validation successfully parsed and security-verified!
+          {/* RIGHT: Document Preview + Results */}
+          <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column' }}>
+            {agentRunning && (
+              <div className="ai-doc-scan" style={{ flex: 1, background: 'rgba(0,0,0,0.3)', padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
+                <div className="ai-doc-scan-line" />
+                <FileText size={48} color="var(--ff-text-muted)" style={{ opacity: 0.4 }} />
+                <div style={{ fontSize: 13, color: 'var(--ff-primary)', marginTop: 14, fontWeight: 600 }}>
+                  Analyzing document<span className="ai-thinking"><span className="ai-thinking-dot" /><span className="ai-thinking-dot" /><span className="ai-thinking-dot" /></span>
                 </div>
-                
-                <table style={{ width: '100%', fontSize: 11 }}>
-                  <tbody>
-                    <tr>
-                      <td style={{ color: 'var(--ff-text-muted)', padding: '2px 0' }}>Underwriting Confidence Rating</td>
-                      <td style={{ fontWeight: 700, color: '#fff', textAlign: 'right' }}>{(confidence * 100).toFixed(0)}%</td>
-                    </tr>
-                    <tr>
-                      <td style={{ color: 'var(--ff-text-muted)', padding: '2px 0' }}>Debtor Risk Profile Score</td>
-                      <td style={{ fontWeight: 700, color: 'var(--ff-success)', textAlign: 'right' }}>{anchorRating} / 1000</td>
-                    </tr>
-                    <tr>
-                      <td style={{ color: 'var(--ff-text-muted)', padding: '2px 0' }}>Vault Liquidity Available</td>
-                      <td style={{ fontWeight: 700, color: '#fff', textAlign: 'right' }}>{vaultLiquidity} USDC</td>
-                    </tr>
-                    <tr>
-                      <td style={{ color: 'var(--ff-text-muted)', padding: '2px 0' }}>System Verification Code</td>
-                      <td style={{ fontFamily: 'var(--ff-mono)', color: 'var(--ff-primary)', textAlign: 'right' }}>
-                        {underwriterSignature ? `${underwriterSignature.slice(0, 16)}...` : 'N/A'}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div style={{ fontSize: 11, color: 'var(--ff-text-muted)', marginTop: 4 }}>Extracting entities and verifying signatures</div>
+              </div>
+            )}
 
-                {/* Autonomous Agent Logs Console */}
-                <div style={{ marginTop: 6, borderTop: '1px solid var(--ff-border)', paddingTop: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: 'var(--ff-primary)', marginBottom: 8 }}>
-                    <Bot size={12} />
-                    <span>Automated Risk Profile Evaluation:</span>
+            {agentComplete && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                  <div className="ai-score-gauge">
+                    <svg width="110" height="110" viewBox="0 0 110 110">
+                      <circle className="ai-score-track" cx="55" cy="55" r="45" />
+                      <circle className="ai-score-fill" cx="55" cy="55" r="45" stroke="var(--ff-success)" strokeDasharray="283" strokeDashoffset={283 - (283 * (anchorRating / 1000))} />
+                    </svg>
+                    <div className="ai-score-label">
+                      <div className="ai-score-number" style={{ color: 'var(--ff-success)' }}>{anchorRating}</div>
+                      <div className="ai-score-unit">/ 1000</div>
+                    </div>
                   </div>
-                  <div style={{
-                    background: '#070707', border: '1px solid #141414', borderRadius: 6, padding: '8px 10px',
-                    fontFamily: 'var(--ff-mono)', fontSize: 9, display: 'flex', flexDirection: 'column', gap: 6,
-                    maxHeight: 140, overflowY: 'auto'
-                  }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, color: 'var(--ff-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Debtor Credit Score</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ff-success)', marginTop: 2 }}>
+                      {anchorRating >= 700 ? 'Excellent' : anchorRating >= 500 ? 'Good' : 'Elevated Risk'}
+                    </div>
+                    <div className="ai-decision ai-decision--approved" style={{ marginTop: 8 }}><CheckCircle size={12} /> Underwriting Approved</div>
+                  </div>
+                </div>
+
+                <div className="ai-result-panel">
+                  <div className="ai-result-row"><span className="ai-result-key">OCR Confidence</span><span className="ai-result-value" style={{ color: 'var(--ff-success)' }}>{(confidence * 100).toFixed(0)}%</span></div>
+                  <div className="ai-result-row"><span className="ai-result-key">Risk Margin</span><span className="ai-result-value">{riskBps} bps</span></div>
+                  <div className="ai-result-row"><span className="ai-result-key">Vault Liquidity</span><span className="ai-result-value">{vaultLiquidity} USDC</span></div>
+                  <div className="ai-result-row"><span className="ai-result-key">Verification Code</span><span className="ai-result-value" style={{ color: 'var(--ff-primary)', fontSize: 10 }}>{underwriterSignature ? `${underwriterSignature.slice(0, 14)}...` : 'N/A'}</span></div>
+                </div>
+
+                {reactAgentLogs.length > 0 && (
+                  <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid var(--ff-border)', borderRadius: 8, padding: '10px 14px', maxHeight: 130, overflowY: 'auto' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, color: 'var(--ff-primary)', marginBottom: 6 }}><Bot size={11} /> AI Reasoning Trace</div>
                     {reactAgentLogs.map((log, idx) => {
-                      let color = 'var(--ff-text-muted)'
-                      let prefix = 'THOUGHT:'
-                      if (log.type === 'action') {
-                        color = '#3b82f6'
-                        prefix = 'ACTION:'
-                      } else if (log.type === 'observation') {
-                        color = '#a855f7'
-                        prefix = 'OBSERVATION:'
-                      } else if (log.type === 'output') {
-                        color = 'var(--ff-success)'
-                        prefix = 'OUTPUT:'
-                      }
+                      const c = log.type === 'action' ? '#3b82f6' : log.type === 'observation' ? '#a855f7' : log.type === 'output' ? 'var(--ff-success)' : 'var(--ff-text-muted)'
                       return (
-                        <div key={idx} style={{ lineHeight: 1.3 }}>
-                          <span style={{ color, fontWeight: 'bold', marginRight: 6 }}>{prefix}</span>
+                        <div key={idx} style={{ fontSize: 9.5, fontFamily: 'var(--ff-mono)', lineHeight: 1.35, marginBottom: 3 }}>
+                          <span style={{ color: c, fontWeight: 700, marginRight: 4 }}>{log.type.toUpperCase()}:</span>
                           <span style={{ color: '#d1d5db' }}>{log.message}</span>
                         </div>
                       )
                     })}
                   </div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--ff-text-muted)', fontSize: 12 }}>
-                <BadgeInfo size={20} style={{ margin: '0 auto 8px', color: '#666' }} />
-                No invoice currently imported. Use the quick-mock shortcuts or import a PDF invoice above to initiate automated risk analysis.
+                )}
               </div>
             )}
-          </div>
 
-          {/* Column 3: Ingestion Sandbox (High Fidelity PDF Visual Template) */}
-          <div style={{ 
-            background: 'rgba(0,0,0,0.3)',
-            border: '1px dashed var(--ff-border)',
-            borderRadius: 8,
-            padding: 16,
-            minHeight: 250,
-            display: 'flex',
-            flexDirection: 'column',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ff-text-muted)', display: 'block', textTransform: 'uppercase', marginBottom: 12 }}>
-              Interactive OCR Ingestion Sandbox
-            </span>
-
-            {agentRunning ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                <style>{`
-                  @keyframes scanLaser {
-                    0% { top: 0%; }
-                    50% { top: 100%; }
-                    100% { top: 0%; }
-                  }
-                `}</style>
-                <div style={{ 
-                  position: 'absolute', top: 0, left: 0, width: '100%', height: 4, 
-                  background: 'linear-gradient(90deg, transparent, var(--ff-primary), transparent)',
-                  boxShadow: '0 0 10px var(--ff-primary)',
-                  animation: 'scanLaser 2s linear infinite'
-                }} />
-                <FileText size={48} className="pulse" color="var(--ff-text-muted)" style={{ opacity: 0.6 }} />
-                <div style={{ fontSize: 12, color: 'var(--ff-primary)', marginTop: 12, fontWeight: 600 }}>Scanning Invoice Stream...</div>
-                <div style={{ fontSize: 10, color: 'var(--ff-text-muted)', marginTop: 4 }}>Validating checksum & signature...</div>
-              </div>
-            ) : agentComplete ? (
-              <div style={{ 
-                flex: 1, 
-                background: '#fff', 
-                color: '#334155', 
-                borderRadius: 6, 
-                padding: 16, 
-                fontSize: 10, 
-                boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8,
-                position: 'relative',
-                border: '1px solid #cbd5e1'
-              }}>
-                <div style={{ position: 'absolute', top: 6, right: 6, fontSize: 8, color: 'var(--ff-success)', background: 'rgba(52, 211, 153, 0.1)', padding: '2px 4px', borderRadius: 4, border: '1px solid rgba(52, 211, 153, 0.2)', fontWeight: 'bold' }}>
-                  OCR PARSED
+            {!agentRunning && !agentComplete && (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '32px 16px', minHeight: 280 }}>
+                <div style={{ width: 64, height: 64, borderRadius: 16, background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                  <BrainCircuit size={28} color="var(--ff-primary)" style={{ opacity: 0.6 }} />
                 </div>
-
-                <div style={{ borderBottom: '2px solid #334155', paddingBottom: 6, marginBottom: 4 }}>
-                  <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#1e293b' }}>
-                    Commercial Invoice
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ff-text)', marginBottom: 4 }}>AI Analysis Ready</div>
+                <div style={{ fontSize: 12, color: 'var(--ff-text-muted)', maxWidth: 260, lineHeight: 1.5 }}>
+                  Upload an invoice to watch the AI extract fields, verify entities, and calculate risk scores in real time.
+                </div>
+                <div style={{ marginTop: 20, display: 'flex', gap: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(52,211,153,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FileText size={14} color="var(--ff-success)" style={{ opacity: 0.6 }} /></div>
+                    <span style={{ fontSize: 9, color: 'var(--ff-text-muted)' }}>OCR</span>
                   </div>
-                  <div style={{ fontSize: 8, color: '#64748b', marginTop: 2 }}>
-                    Verified checksum ledger id: {invoiceHash ? `${invoiceHash.slice(0, 10)}...` : 'N/A'}
+                  <div style={{ color: 'var(--ff-text-muted)', alignSelf: 'center', fontSize: 10 }}>→</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(56,189,248,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ShieldAlert size={14} color="var(--ff-primary)" style={{ opacity: 0.6 }} /></div>
+                    <span style={{ fontSize: 9, color: 'var(--ff-text-muted)' }}>Verify</span>
+                  </div>
+                  <div style={{ color: 'var(--ff-text-muted)', alignSelf: 'center', fontSize: 10 }}>→</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(167,139,250,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={14} color="var(--ff-violet)" style={{ opacity: 0.6 }} /></div>
+                    <span style={{ fontSize: 9, color: 'var(--ff-text-muted)' }}>Score</span>
                   </div>
                 </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 4 }}>
-                  <div>
-                    <div style={{ fontSize: 7, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Supplier (Issuer)</div>
-                    <div style={{ fontWeight: 600, color: '#334155' }}>
-                      {description.toLowerCase().includes('apple') ? 'Apple Wafer Supplies' : 'Tesla Chassis Parts Ltd'}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 7, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Debtor (Anchor)</div>
-                    <div style={{ 
-                      fontWeight: 600, color: '#0ea5e9', padding: '2px 4px', background: 'rgba(14, 165, 233, 0.08)', 
-                      borderRadius: 4, border: '1px dashed #0ea5e9', display: 'inline-block' 
-                    }}>
-                      {anchorAddr ? `${anchorAddr.slice(0, 8)}...${anchorAddr.slice(-6)}` : 'Undefined Anchor'}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ border: '1px dashed #cbd5e1', borderRadius: 4, padding: 8, background: '#f8fafc', marginBottom: 4 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontWeight: 700 }}>Line Description</span>
-                    <span style={{ fontWeight: 700 }}>Subtotal</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569' }}>
-                    <span>{description || 'Imported Cargo Invoices'}</span>
-                    <span style={{ 
-                      fontWeight: 700, color: '#10b981', background: 'rgba(16, 185, 129, 0.08)',
-                      padding: '1px 4px', border: '1px dashed #10b981', borderRadius: 4
-                    }}>
-                      {amount} {selectedToken}
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, borderTop: '1px solid #e2e8f0', paddingTop: 6, marginTop: 'auto' }}>
-                  <div>
-                    <div style={{ fontSize: 7, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Due Date</div>
-                    <div style={{ 
-                      fontWeight: 600, color: '#f59e0b', padding: '2px 4px', background: 'rgba(245, 158, 11, 0.08)', 
-                      borderRadius: 4, border: '1px dashed #f59e0b', display: 'inline-block'
-                    }}>
-                      {dueDate}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 7, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>OCR Confidence</div>
-                    <div style={{ fontWeight: 700, color: '#10b981', fontSize: 11 }}>
-                      {(confidence * 100).toFixed(0)}%
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--ff-text-muted)', fontSize: 12 }}>
-                <FileText size={36} color="#444" style={{ marginBottom: 10 }} />
-                <span>Invoice PDF sandbox placeholder</span>
-                <span style={{ fontSize: 10, color: '#555', marginTop: 4 }}>Select a mock invoice preset to trigger high-fidelity sandbox rendering.</span>
               </div>
             )}
           </div>
