@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useReadContract } from 'wagmi'
-import { LayoutDashboard, FileText, Building2, TrendingUp, Shield, ArrowRightLeft, ExternalLink, Hexagon, Home } from 'lucide-react'
+import { LayoutDashboard, FileText, Building2, TrendingUp, Shield, ArrowRightLeft, Hexagon, Home, Bot } from 'lucide-react'
 import { USDC_ADDRESS_ARC, usdcAbi, FACTORFI_CONTRACT_ADDRESS, factorFiAbi } from '@/lib/contracts'
-import { formatUSDC, getExplorerAddressLink } from '@/lib/utils'
+import { formatUSDC } from '@/lib/utils'
+import { toast } from 'sonner'
 
 import LandingView from './views/LandingView'
 import DashboardView from './views/DashboardView'
@@ -14,36 +14,66 @@ import AnchorView from './views/AnchorView'
 import InvestorView from './views/InvestorView'
 import BridgeView from './views/BridgeView'
 import CreditView from './views/CreditView'
+import AgentView from './views/AgentView'
 
 import { useUnifiedAccount } from '@/lib/web3-provider'
-import EmbeddedAuth from './components/EmbeddedAuth'
+import Header from './components/Header'
 import ComplianceModal from './components/ComplianceModal'
 import Breadcrumbs from './components/Breadcrumbs'
 import { useOnboarding } from './components/OnboardingProvider'
-import { HelpCircle } from 'lucide-react'
 
-type View = 'landing' | 'dashboard' | 'supplier' | 'anchor' | 'investor' | 'bridge' | 'credit'
+type View = 'landing' | 'dashboard' | 'supplier' | 'anchor' | 'investor' | 'bridge' | 'credit' | 'agent'
 
 const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode }[] = [
   { id: 'landing', label: 'Home', icon: <Home size={16} /> },
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
-  { id: 'supplier', label: 'Supplier', icon: <FileText size={16} /> },
-  { id: 'anchor', label: 'Anchor', icon: <Building2 size={16} /> },
-  { id: 'investor', label: 'Invest', icon: <TrendingUp size={16} /> },
-  { id: 'bridge', label: 'Bridge', icon: <ArrowRightLeft size={16} /> },
-  { id: 'credit', label: 'Credit', icon: <Shield size={16} /> },
+  { id: 'supplier', label: 'Supplier Portal', icon: <FileText size={16} /> },
+  { id: 'anchor', label: 'Buyer Portal', icon: <Building2 size={16} /> },
+  { id: 'investor', label: 'Invest Pools', icon: <TrendingUp size={16} /> },
+  { id: 'bridge', label: 'Funding Bridge', icon: <ArrowRightLeft size={16} /> },
+  { id: 'credit', label: 'Credit Passports', icon: <Shield size={16} /> },
+  { id: 'agent', label: 'Agent OS', icon: <Bot size={16} /> },
 ]
 
 export default function FactorFiApp() {
-  const [activeView, setActiveView] = useState<View>('landing')
-  const { address, isConnected, providerType } = useUnifiedAccount()
+  const [activeView, setActiveView] = useState<View>('agent')
+  const { address, isConnected } = useUnifiedAccount()
   const { startTour } = useOnboarding()
+  const [faucetLoading, setFaucetLoading] = useState(false)
+
+  const handleFaucetRequest = async () => {
+    if (!address) return toast.error('Please connect your wallet first')
+    setFaucetLoading(true)
+    const toastId = toast.loading('Requesting sandbox gas and tokens from relayer...')
+    try {
+      const res = await fetch('/api/faucet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Faucet request failed')
+      
+      toast.success('Funds dispensed!', {
+        id: toastId,
+        description: 'USDC Gas and ERC20 tokens sent to your wallet.'
+      })
+    } catch (e: any) {
+      console.error(e)
+      toast.error('Faucet failed', {
+        id: toastId,
+        description: e.message
+      })
+    } finally {
+      setFaucetLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       const view = params.get('view') as View | null
-      if (view && ['landing', 'dashboard', 'supplier', 'anchor', 'investor', 'bridge', 'credit'].includes(view)) {
+      if (view && ['landing', 'dashboard', 'supplier', 'anchor', 'investor', 'bridge', 'credit', 'agent'].includes(view)) {
         setActiveView(view)
       }
     }
@@ -74,84 +104,22 @@ export default function FactorFiApp() {
       case 'investor': return <InvestorView />
       case 'bridge': return <BridgeView />
       case 'credit': return <CreditView />
+      case 'agent': return <AgentView setActiveView={setActiveView} />
       default: return <LandingView onLaunchApp={(v) => setActiveView(v)} />
     }
   }
 
   return (
     <div className="app-shell">
-      {/* Top Navbar */}
-      <header className="navbar">
-        <div className="navbar-inner">
-          <div className="navbar-left">
-            <div className="navbar-brand" onClick={() => setActiveView('landing')}>
-              <h1>
-                <Hexagon className="text-primary" size={22} fill="currentColor" fillOpacity={0.2} strokeWidth={2} />
-                FactorFi
-              </h1>
-              <span className="brand-tag">Arc</span>
-            </div>
-
-            <nav className="navbar-nav" data-tour="nav-tabs">
-              {NAV_ITEMS.map((item) => (
-                <button
-                  key={item.id}
-                  className={`nav-tab ${activeView === item.id ? 'active' : ''}`}
-                  onClick={() => setActiveView(item.id)}
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </nav>
-          </div>
-
-          <div className="navbar-right">
-            <button 
-              onClick={startTour}
-              style={{
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid var(--ff-border)',
-                borderRadius: 'var(--ff-radius-sm)',
-                padding: '6px 12px',
-                fontSize: 11,
-                fontWeight: 600,
-                color: 'var(--ff-text-secondary)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                height: 28,
-                transition: 'all var(--ff-transition)'
-              }}
-              className="btn-secondary"
-            >
-              <HelpCircle size={13} />
-              <span>Tour</span>
-            </button>
-            <div className="network-badge">
-              <span className="dot" />
-              Arc Testnet
-            </div>
-            {isConnected && usdcBalance !== undefined && (
-              <div className="balance-pill">
-                <span className="balance-amount">
-                  {formatUSDC(usdcBalance as bigint)} USDC
-                </span>
-                <a href={getExplorerAddressLink(address!)} target="_blank" rel="noopener noreferrer" className="link-explorer">
-                  <ExternalLink size={12} />
-                </a>
-              </div>
-            )}
-            <div className="connect-btn-wrapper" data-tour="connect-wallet" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <EmbeddedAuth />
-              {providerType !== 'circle' && (
-                <ConnectButton showBalance={false} chainStatus="none" accountStatus="address" />
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* World-class Corporate Header */}
+      <Header
+        activeView={activeView}
+        setActiveView={setActiveView}
+        onFaucetRequest={handleFaucetRequest}
+        faucetLoading={faucetLoading}
+        startTour={startTour}
+        usdcBalance={usdcBalance}
+      />
 
       {/* Main Content */}
       <main className="main-content" id="main-content">
