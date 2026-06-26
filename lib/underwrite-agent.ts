@@ -48,17 +48,131 @@ export class UnderwriterAgent {
     return signature
   }
 
-  // 3. Dynamic text parsing of invoice documents (PDF/TXT/JSON)
+  // Helper to fetch from DeepSeek or OpenAI with automatic fallback
+  private static async callLLM(systemPrompt: string, userPrompt: string): Promise<string> {
+    const deepseekKey = process.env.DEEPSEEK_API_KEY
+    const openaiKey = process.env.OPENAI_API_KEY
+
+    if (!deepseekKey && !openaiKey) {
+      console.warn('[LLM] No API keys configured in .env. Falling back to local pattern-matching.')
+      return ''
+    }
+
+    // Try DeepSeek V4 (Flash or Pro) first
+    if (deepseekKey) {
+      try {
+        console.log('[LLM] Invoking DeepSeek v4 API...')
+        const res = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${deepseekKey}`
+          },
+          body: JSON.stringify({
+            model: 'deepseek-v4-flash',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.1,
+            response_format: { type: 'json_object' }
+          })
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          const text = data.choices?.[0]?.message?.content || ''
+          if (text) {
+            console.log('[LLM] DeepSeek parse successful.')
+            return text
+          }
+        } else {
+          const errText = await res.text()
+          console.warn(`[LLM] DeepSeek API returned status ${res.status}: ${errText}`)
+        }
+      } catch (err: any) {
+        console.warn(`[LLM] DeepSeek call failed: ${err.message}. Falling back to OpenAI...`)
+      }
+    }
+
+    // Try OpenAI fallback
+    if (openaiKey) {
+      try {
+        console.log('[LLM] Invoking OpenAI GPT-4o-mini API fallback...')
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${openaiKey}`
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.1,
+            response_format: { type: 'json_object' }
+          })
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          const text = data.choices?.[0]?.message?.content || ''
+          if (text) {
+            console.log('[LLM] OpenAI parse successful.')
+            return text
+          }
+        } else {
+          const errText = await res.text()
+          console.error(`[LLM] OpenAI API returned status ${res.status}: ${errText}`)
+        }
+      } catch (err: any) {
+        console.error(`[LLM] OpenAI call failed: ${err.message}`)
+      }
+    }
+
+    return ''
+  }
+
+  // 3. Dynamic text parsing of invoice documents (PDF/TXT/JSON) using DeepSeek/OpenAI
   public static async parseInvoiceDocument(fileBuffer: Buffer, fileName: string): Promise<InvoiceDetails> {
     console.log(`[Underwriter Agent] Extracting invoice structure from file: ${fileName} (${fileBuffer.length} bytes)`)
 
     const content = fileBuffer.toString('utf8')
+    const futureDate = Math.floor(Date.now() / 1000) + 30 * 86400 // due in 30 days
 
-    // Find amount (e.g. Amount: 15000 or Total: $25,000)
+    // Attempt to parse using LLMs first
+    const systemPrompt = `You are an expert invoice processing agent. Parse the raw invoice text and return a valid JSON object matching this exact schema:
+{
+  "anchor": "The EVM 0x address of the debtor/buyer (must be a valid hex address, default if not found: '0x32a398da1243c8b991aba311a7db8fd860c234a5')",
+  "amount": "The subtotal/total face value amount as a string number (e.g. '15000', default if not found: '15000')",
+  "dueDate": "Unix timestamp (number) of the payment due date (default: ${futureDate})",
+  "description": "Short summary of the items supplied (e.g. 'Apple Inc. Silicon Wafer Supply', default if not found: 'Invoice supply')"
+}`
+
+    const userPrompt = `FileName: ${fileName}\nContent:\n${content.slice(0, 4000)}`
+
+    try {
+      const llmResult = await this.callLLM(systemPrompt, userPrompt)
+      if (llmResult) {
+        const parsed = JSON.parse(llmResult)
+        if (parsed && parsed.anchor && parsed.amount) {
+          return {
+            anchor: parsed.anchor.toLowerCase(),
+            amount: String(parsed.amount),
+            dueDate: Number(parsed.dueDate) || futureDate,
+            description: parsed.description || `Invoice supply - ${fileName}`
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[Underwriter Agent] LLM parsing failed: ${err.message}. Defaulting to pattern matching.`)
+    }
+
+    // Fallback: Pattern matching (Regex)
     const amountRegex = /(?:amount|total|value|price)[:\s=]+\$?([\d,]+(?:\.\d{1,2})?)/i
-    // Find anchor address (0x...)
     const anchorRegex = /(?:anchor|debtor|buyer|target|to)[:\s=]+(0x[a-fA-F0-9]{40})/i
-    // Find description
     const descRegex = /(?:description|desc|item|details|subject)[:\s=]+([^\r\n]+)/i
 
     const amountMatch = content.match(amountRegex)
@@ -74,7 +188,7 @@ export class UnderwriterAgent {
       amount = '25000'
     }
 
-    let anchor = '0x32a398da1243c8b991aba311a7db8fd860c234a5' // Fallback anchor address
+    let anchor = '0x32a398da1243c8b991aba311a7db8fd860c234a5'
     if (anchorMatch) {
       anchor = anchorMatch[1].toLowerCase()
     }
@@ -88,8 +202,6 @@ export class UnderwriterAgent {
       description = 'Tesla Chassis Supply'
     }
 
-    const futureDate = Math.floor(Date.now() / 1000) + 30 * 86400 // due in 30 days
-    
     return {
       anchor,
       amount,

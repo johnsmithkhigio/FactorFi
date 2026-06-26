@@ -55,7 +55,19 @@ export const GatewayClient = {
   getGatewayBalance(address: string): number {
     const ledger = readLedger()
     const addr = address.toLowerCase()
-    return ledger.balances[addr] || 0
+    if (ledger.balances[addr] === undefined) {
+      ledger.balances[addr] = 0.05
+      ledger.transactions.push({
+        address: addr,
+        type: 'deposit',
+        amount: 0.05,
+        timestamp: Date.now(),
+        description: 'Complimentary trial credits for AI Underwriting',
+        txHash: '0xwelcomecredits'
+      })
+      writeLedger(ledger)
+    }
+    return ledger.balances[addr]
   },
 
   async depositToGateway(address: string, amount: number, txHash?: string): Promise<{ success: boolean; newBalance: number }> {
@@ -181,6 +193,18 @@ export const GatewayClient = {
   getTransactions(address: string): Transaction[] {
     const ledger = readLedger()
     const addr = address.toLowerCase()
+    if (ledger.balances[addr] === undefined) {
+      ledger.balances[addr] = 0.05
+      ledger.transactions.push({
+        address: addr,
+        type: 'deposit',
+        amount: 0.05,
+        timestamp: Date.now(),
+        description: 'Complimentary trial credits for AI Underwriting',
+        txHash: '0xwelcomecredits'
+      })
+      writeLedger(ledger)
+    }
     return ledger.transactions.filter(t => t.address === addr)
   },
 
