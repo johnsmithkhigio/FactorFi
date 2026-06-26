@@ -69,6 +69,54 @@ export async function POST(req: NextRequest) {
     const balance = await publicClient.getBalance({ address: account.address })
     console.log('Relayer balance:', (Number(balance) / 1e18).toFixed(6), 'USDC (gas)')
 
+    // Auto-register Supplier Compliance if needed
+    const isSupplierCompliant = await publicClient.readContract({
+      address: FACTORFI_CONTRACT_ADDRESS,
+      abi: factorFiAbi,
+      functionName: 'isCompliant',
+      args: [supplier]
+    })
+
+    if (!isSupplierCompliant) {
+      console.log(`Supplier ${supplier} is not compliant. Auto-registering compliance...`)
+      const registerComplianceHash = await walletClient.writeContract({
+        address: FACTORFI_CONTRACT_ADDRESS,
+        abi: factorFiAbi,
+        functionName: 'updateComplianceStatus',
+        args: [supplier, true]
+      })
+      console.log(`Compliance tx submitted. Hash: ${registerComplianceHash}. Waiting for confirmation...`)
+      await publicClient.waitForTransactionReceipt({ hash: registerComplianceHash })
+      console.log('Supplier registered as compliant!')
+    } else {
+      console.log(`Supplier ${supplier} is already compliant.`)
+    }
+
+    // Auto-register Anchor if needed
+    const anchorData = await publicClient.readContract({
+      address: FACTORFI_CONTRACT_ADDRESS,
+      abi: factorFiAbi,
+      functionName: 'getAnchor',
+      args: [anchor]
+    }) as any
+
+    const isAnchorRegistered = Array.isArray(anchorData) ? anchorData[4] : (anchorData?.isRegistered || false)
+
+    if (!isAnchorRegistered) {
+      console.log(`Anchor ${anchor} is not registered. Auto-registering anchor...`)
+      const registerAnchorHash = await walletClient.writeContract({
+        address: FACTORFI_CONTRACT_ADDRESS,
+        abi: factorFiAbi,
+        functionName: 'registerAnchorOnBehalf',
+        args: [anchor, 'Auto-Registered Anchor', 750n]
+      })
+      console.log(`Anchor registration tx submitted. Hash: ${registerAnchorHash}. Waiting for confirmation...`)
+      await publicClient.waitForTransactionReceipt({ hash: registerAnchorHash })
+      console.log('Anchor registered successfully!')
+    } else {
+      console.log(`Anchor ${anchor} is already registered.`)
+    }
+
     // 3. Formulate and broadcast sponsored transaction on Arc Testnet
     const txHash = await walletClient.writeContract({
       address: FACTORFI_CONTRACT_ADDRESS,
