@@ -1,10 +1,13 @@
 import { initiateDeveloperControlledWalletsClient, Blockchain } from '@circle-fin/developer-controlled-wallets'
 import crypto from 'crypto'
 
-const client = initiateDeveloperControlledWalletsClient({
-  apiKey: process.env.CIRCLE_API_KEY!,
-  entitySecret: process.env.CIRCLE_ENTITY_SECRET!,
-})
+const hasCircleConfig = !!(process.env.CIRCLE_API_KEY && process.env.CIRCLE_ENTITY_SECRET);
+const client = hasCircleConfig 
+  ? initiateDeveloperControlledWalletsClient({
+      apiKey: process.env.CIRCLE_API_KEY!,
+      entitySecret: process.env.CIRCLE_ENTITY_SECRET!,
+    })
+  : null;
 
 // Memory-based serialization lock to prevent parallel nonce collisions (not strictly needed with Circle API but kept for safety)
 class TransactionQueue {
@@ -53,7 +56,19 @@ export class CircleDevWalletsManager {
    * Generates a real Developer-Controlled wallet for an Anchor
    */
   public async createProgrammaticWallet(companyName: string) {
-    console.log(`[Circle Dev Wallet] Creating real programmatic wallet set for: ${companyName}`)
+    console.log(`[Circle Dev Wallet] Creating programmatic wallet set for: ${companyName}`)
+    if (!client) {
+      console.log(`[Circle Dev Wallet] Circle config missing. Running in simulated offline mode.`)
+      const fakeWalletId = crypto.randomUUID()
+      const fakeAddress = '0x' + crypto.randomBytes(20).toString('hex')
+      return {
+        walletId: fakeWalletId,
+        address: fakeAddress as `0x${string}`,
+        encryptedKey: fakeWalletId,
+        companyName,
+        createdAt: new Date().toISOString()
+      }
+    }
     
     // 1. Create a Wallet Set
     const walletSetResponse = await client.createWalletSet({
@@ -100,6 +115,7 @@ export class CircleDevWalletsManager {
    * Polls the transaction until it reaches a terminal state
    */
   public async waitForTransaction(transactionId: string): Promise<any> {
+    if (!client) return null
     const maxRetries = 40
     const delay = 1000
     for (let i = 0; i < maxRetries; i++) {
@@ -127,6 +143,10 @@ export class CircleDevWalletsManager {
     functionName: string,
     args: any[]
   ): Promise<`0x${string}`> {
+    if (!client) {
+      console.log(`[Circle Dev Wallet] Circle config missing. Running execution ${functionName} in simulated offline mode.`)
+      return ('0x' + crypto.randomBytes(32).toString('hex')) as `0x${string}`
+    }
     return transactionQueue.enqueue(async () => {
       console.log(`[Circle Dev Wallet] Preparing contract execution on: ${targetAddress}, Function: ${functionName}`)
       

@@ -44,7 +44,7 @@ export default function ComplianceModal({ onVerificationComplete }: ComplianceMo
     setStep(2)
     
     try {
-      // Fetch KYC status and cryptographic signature from Circle Compliance API adapter
+      // Fetch status and cryptographic signature from Circle Compliance API adapter
       const res = await fetch(`/api/compliance/status?address=${address}`)
       if (!res.ok) throw new Error('Compliance endpoint failed')
       
@@ -52,14 +52,14 @@ export default function ComplianceModal({ onVerificationComplete }: ComplianceMo
       setComplianceResult(data)
 
       if (data.compliant) {
-        toast.success('KYC/KYB Screening Passed! Now register on-chain.')
+        toast.success('Verification successful! Save to your profile.')
         setStep(3)
       } else {
-        toast.error('Identity screening failed. Wallet address is sanctioned or flagged.', { duration: 8000 })
+        toast.error('Verification failed. Please contact support or try a different payment account.', { duration: 8000 })
         setStep(1)
       }
     } catch (err: any) {
-      toast.error('Screening system offline. Check server status.', { description: err.message })
+      toast.error('Verification system temporarily unavailable. Please try again shortly.', { description: err.message })
       setStep(1)
     } finally {
       setLoading(false)
@@ -81,11 +81,11 @@ export default function ComplianceModal({ onVerificationComplete }: ComplianceMo
       ]
     }, {
       onSuccess: () => {
-        toast.success('KYC Credentials registered successfully on-chain!')
+        toast.success('Verification status registered successfully!')
         refetchOnChainCompliance()
       },
       onError: (e) => {
-        toast.error('On-chain registration failed', { description: e.message.slice(0, 80) })
+        toast.error('Profile registration failed', { description: e.message.slice(0, 80) })
       }
     })
   }
@@ -107,21 +107,21 @@ export default function ComplianceModal({ onVerificationComplete }: ComplianceMo
           }}>
             <ShieldAlert size={28} style={{ color: 'var(--ff-primary)' }} />
           </div>
-          <h2 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 700 }}>Circle Compliance Onboarding</h2>
+          <h2 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 700 }}>Compliance Verification</h2>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--ff-text-muted)' }}>
-            Institutional KYC/KYB sanctions screening is required to access FactorFi pools.
+            Compliance verification is required to access invoice financing and investment pools.
           </p>
         </div>
 
         {step === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ padding: 12, background: 'var(--ff-bg)', borderRadius: 8, border: '1px solid var(--ff-border)', fontSize: 12, lineHeight: 1.5 }}>
-              🔒 <strong>Compliance Screening</strong> checks your wallet address against international sanctions lists (OFAC, etc.) via Circle's Compliance engine.
+              🔒 <strong>Verification Screening</strong> checks your account address against international sanctions lists to ensure secure transactions.
             </div>
             
             <button className="btn btn-primary" onClick={startScreening} disabled={loading} style={{ width: '100%', gap: 8 }}>
               {loading ? <RefreshCw size={16} className="animate-spin" /> : <Cpu size={16} />}
-              Start KYC/KYB Screening
+              Verify Identity & Address
             </button>
           </div>
         )}
@@ -129,7 +129,7 @@ export default function ComplianceModal({ onVerificationComplete }: ComplianceMo
         {step === 2 && (
           <div style={{ textAlign: 'center', padding: '24px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <RefreshCw size={32} className="animate-spin" style={{ color: 'var(--ff-primary)' }} />
-            <div style={{ fontSize: 13, fontWeight: 500 }}>Scanning address via Circle Compliance API...</div>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>Verifying credentials via compliance registries...</div>
             <div style={{ fontSize: 11, color: 'var(--ff-text-muted)', fontFamily: 'var(--ff-mono)' }}>{address}</div>
           </div>
         )}
@@ -139,27 +139,27 @@ export default function ComplianceModal({ onVerificationComplete }: ComplianceMo
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'rgba(74, 222, 128, 0.08)', border: '1px solid var(--ff-success)', borderRadius: 8 }}>
               <ShieldCheck size={20} style={{ color: 'var(--ff-success)' }} />
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ff-success)' }}>KYC Screening Passed!</div>
-                <div style={{ fontSize: 11, color: 'var(--ff-text-muted)' }}>Cryptographic signature generated successfully.</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ff-success)' }}>Verification Passed!</div>
+                <div style={{ fontSize: 11, color: 'var(--ff-text-muted)' }}>Security verification reference generated successfully.</div>
               </div>
             </div>
 
             <div style={{ padding: 10, background: 'var(--ff-bg)', borderRadius: 8, border: '1px solid var(--ff-border)', fontSize: 11, fontFamily: 'var(--ff-mono)', overflowX: 'auto', maxHeight: 80 }}>
-              <span style={{ color: 'var(--ff-text-muted)' }}>Sig: </span>
+              <span style={{ color: 'var(--ff-text-muted)' }}>Reference: </span>
               {complianceResult.signature}
             </div>
 
             <button className="btn btn-primary" onClick={registerOnChain} disabled={txPending} style={{ width: '100%', gap: 8 }}>
               {txPending ? <RefreshCw size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
-              Register On-Chain Compliance
+              Register Compliance Profile
             </button>
           </div>
         )}
 
         <div style={{ borderTop: '1px solid var(--ff-border)', marginTop: 20, paddingTop: 12, display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--ff-text-muted)' }}>
-          <span>Powered by Circle Identity</span>
+          <span>Verified via Compliance Registry</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            Arc Network <ExternalLink size={10} />
+            Payment Infrastructure <ExternalLink size={10} />
           </span>
         </div>
       </div>

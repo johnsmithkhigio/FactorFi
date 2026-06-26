@@ -24,8 +24,23 @@ export async function POST(req: NextRequest) {
     // 1. Fetch address only if requested after PIN challenge completion
     if (fetchAddressOnly && inputUserToken) {
       console.log(`[Circle W3S] Fetching wallet address for user: ${userId}`)
-      const walletsRes = await circleClient.listWallets({ userToken: inputUserToken })
-      const wallets = walletsRes.data?.wallets || []
+      
+      let wallets: any[] = []
+      // Retry up to 8 times with a 1.5s delay to allow Circle's async relayer to mint the wallet on-chain
+      for (let attempt = 1; attempt <= 8; attempt++) {
+        try {
+          const walletsRes = await circleClient.listWallets({ userToken: inputUserToken })
+          wallets = walletsRes.data?.wallets || []
+          if (wallets.length > 0) {
+            console.log(`[Circle W3S] Found wallet on attempt ${attempt}:`, wallets.map((w: any) => `${w.blockchain}: ${w.address}`))
+            break
+          }
+        } catch (e: any) {
+          console.warn(`[Circle W3S] listWallets attempt ${attempt} warning:`, e.message)
+        }
+        console.log(`[Circle W3S] Attempt ${attempt}: Wallet not indexed yet. Retrying in 1.5s...`)
+        await new Promise(resolve => setTimeout(resolve, 1500))
+      }
 
       if (wallets.length > 0) {
         const arcWallet = wallets.find((w: any) => w.blockchain === Blockchain.ArcTestnet) || wallets[0]

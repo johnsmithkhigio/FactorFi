@@ -9,6 +9,11 @@ function BreadcrumbsInner() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const view = searchParams.get('view')
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Build the breadcrumb segments
   const segments: { label: string; href: string }[] = []
@@ -60,10 +65,12 @@ function BreadcrumbsInner() {
   return (
     <>
       {/* Schema.org Injection for SEO Crawlers */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      {mounted && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
 
       <nav
         aria-label="Breadcrumb"
