@@ -22,8 +22,153 @@ import { getExplorerTxLink, formatUSDC, STATUS_LABELS, formatDate } from '@/lib/
 import { useUnifiedAccount } from '@/lib/web3-provider'
 import { formatTokenAmount, getTokenByAddress } from '@/lib/token-registry'
 
+const importWithRetry = async (fn: () => Promise<any>, retriesLeft = 3, interval = 1000): Promise<any> => {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retriesLeft === 0) {
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, interval));
+    return importWithRetry(fn, retriesLeft - 1, interval);
+  }
+};
+
 export default function InvestorView() {
-  const { address } = useUnifiedAccount()
+  const { address, isConnected, providerType, circleEmail } = useUnifiedAccount()
+  const sdkRef = useRef<any>(null)
+
+  useEffect(() => {
+    const initSdk = async () => {
+      try {
+        const { W3SSdk } = await importWithRetry(() => import('@circle-fin/w3s-pw-web-sdk'))
+        const appId = process.env.NEXT_PUBLIC_CIRCLE_APP_ID || 'bc7e7dbe-d517-591a-b439-368575473966'
+        const sdk = new W3SSdk({
+          appSettings: { appId }
+        });
+        sdkRef.current = sdk
+        console.log('[InvestorView Circle SDK] SDK instance created successfully')
+
+        // Fetch device ID to initialize iframe session
+        sdk.getDeviceId().then((id: string) => {
+          localStorage.setItem('deviceId', id)
+          console.log('[InvestorView Circle SDK] getDeviceId success:', id)
+        }).catch((err: any) => {
+          console.warn('[InvestorView Circle SDK] getDeviceId on init deferred/failed:', err)
+        })
+      } catch (err) {
+        console.error('[InvestorView Circle SDK] Failed to initialize Web SDK:', err)
+      }
+    }
+    initSdk()
+  }, [])
+
+  const pollTxHash = async (chalId: string): Promise<string> => {
+    let consecutiveErrors = 0
+    for (let attempt = 1; attempt <= 60; attempt++) {
+      try {
+        const statusRes = await fetch(`/api/wallets/user/tx-status?email=${circleEmail}&challengeId=${chalId}`)
+        if (statusRes.ok) {
+          consecutiveErrors = 0 // Reset on success
+          const statusData = await statusRes.json()
+          if (statusData.txHash) {
+            return statusData.txHash
+          }
+          if (statusData.state === 'FAILED' || statusData.state === 'DENIED' || statusData.state === 'CANCELLED') {
+            throw new Error(`Transaction ended in terminal state: ${statusData.state}. ${statusData.errorDetails || ''}`)
+          }
+        } else {
+          consecutiveErrors++
+          console.warn(`[pollTxHash] Attempt ${attempt}: HTTP ${statusRes.status} (${consecutiveErrors} consecutive errors)`)
+          if (consecutiveErrors >= 5) {
+            const errorBody = await statusRes.json().catch(() => ({ details: 'Unknown server error' }))
+            throw new Error(`Server error after ${consecutiveErrors} retries: ${errorBody.details || statusRes.statusText}`)
+          }
+        }
+      } catch (err: any) {
+        if (err.message.includes('terminal state') || err.message.includes('Server error after')) {
+          throw err
+        }
+        consecutiveErrors++
+        console.warn(`[pollTxHash] Attempt ${attempt}: fetch error (${consecutiveErrors} consecutive):`, err.message)
+        if (consecutiveErrors >= 5) {
+          throw new Error(`Network error during transaction polling: ${err.message}`)
+        }
+      }
+      await new Promise(r => setTimeout(r, 3000))
+    }
+    throw new Error('Transaction polling timed out (hash not found after 3 minutes)')
+  }
+
+  const executeContractWriteViaCircle = async (
+    contractAddress: string,
+    abiFunctionSignature: string,
+    abiParameters: string[]
+  ): Promise<string> => {
+    if (!circleEmail) {
+      throw new Error('Circle email session not found. Please log in again.')
+    }
+    const sdk = sdkRef.current
+    if (!sdk) {
+      throw new Error('Circle Security Web SDK is not loaded. Please refresh the page.')
+    }
+
+    // 1. Get challenge details from execute API
+    const initRes = await fetch('/api/wallets/user/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: circleEmail,
+        contractAddress,
+        abiFunctionSignature,
+        abiParameters
+      })
+    })
+
+    const initData = await initRes.json()
+    if (!initRes.ok) {
+      throw new Error(initData.details || initData.error || 'Failed to create execution challenge')
+    }
+
+    const { challengeId, userToken, encryptionKey } = initData
+
+    // Ensure deviceId is retrieved and iframe connection is established before execute
+    try {
+      const storedDeviceId = localStorage.getItem('deviceId')
+      if (!storedDeviceId) {
+        const id = await sdk.getDeviceId()
+        localStorage.setItem('deviceId', id)
+        console.log('[InvestorView Circle SDK] getDeviceId before execute success:', id)
+      }
+    } catch (deviceErr: any) {
+      console.warn('[InvestorView Circle SDK] getDeviceId before execute warning:', deviceErr)
+    }
+
+    // 2. Execute challenge via Circle Web SDK (prompts PIN entry)
+    sdk.setAuthentication({ userToken, encryptionKey })
+    
+    return new Promise<string>((resolve, reject) => {
+      sdk.execute(challengeId, async (error: any, result: any) => {
+        if (error) {
+          console.error('[Circle Web SDK] Execute error details:', {
+            code: error?.code,
+            message: error?.message,
+            error: error
+          })
+          reject(new Error(error.message || error.code || 'Verification challenge failed or cancelled.'))
+          return
+        }
+
+        try {
+          // 3. Poll for txHash on-chain using challengeId
+          const txHash = await pollTxHash(challengeId)
+          resolve(txHash)
+        } catch (pollErr) {
+          reject(pollErr)
+        }
+      })
+    })
+  }
   const [invoiceId, setInvoiceId] = useState('')
   const [lookupId, setLookupId] = useState('')
   const [discountBps, setDiscountBps] = useState('300') // 3% default
@@ -56,9 +201,11 @@ export default function InvestorView() {
   const { writeContract: writeNft, isPending: nftPending } = useWriteContract()
 
   // Log auto-scroll
-  const logEndRef = useRef<HTMLDivElement>(null)
+  const logContainerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight
+    }
   }, [scanLogs])
 
   // --- Real-time On-Chain Vault Queries ---
@@ -173,10 +320,36 @@ export default function InvestorView() {
   // Direct Invoice Sponsoring (Manual Flow)
   const handleFund = () => {
     if (!invoiceId || !discountBps) return toast.error('Enter invoice ID and discount')
+    if (!isConnected || !address) return toast.error('Please connect your wallet first')
     if (!inv || inv.status !== 1) return toast.error('Invoice must be in Approved status')
 
     const fundAmount = inv.amount - (inv.amount * BigInt(discountBps) / BigInt(10000))
     const tokenSymbol = getTokenByAddress(inv.token)?.symbol || 'USDC'
+
+    if (providerType === 'circle') {
+      const toastId = toast.loading(`Initiating ${tokenSymbol} approval challenge...`)
+      executeContractWriteViaCircle(
+        inv.token,
+        'approve(address,uint256)',
+        [FACTORFI_CONTRACT_ADDRESS, fundAmount.toString()]
+      ).then(() => {
+        toast.loading(`${tokenSymbol} approved, initiating invoice funding challenge...`, { id: toastId })
+        return executeContractWriteViaCircle(
+          FACTORFI_CONTRACT_ADDRESS,
+          'fundInvoice(uint256,uint256)',
+          [invoiceId.toString(), discountBps.toString()]
+        )
+      }).then((txHash) => {
+        toast.success(`Invoice funded! Asset: ${tokenSymbol}`, {
+          id: toastId,
+          action: { label: 'View', onClick: () => window.open(getExplorerTxLink(txHash), '_blank') }
+        })
+        refetchInvoice()
+      }).catch((err) => {
+        toast.error('Funding failed', { id: toastId, description: err.message.slice(0, 80) })
+      })
+      return
+    }
 
     approveToken({
       address: inv.token as `0x${string}`, 
@@ -206,7 +379,34 @@ export default function InvestorView() {
   // Vault Actions: Deposits
   const handleVaultDeposit = () => {
     if (!vaultDepositInput || Number(vaultDepositInput) <= 0) return toast.error('Enter a valid deposit amount')
+    if (!isConnected || !address) return toast.error('Please connect your wallet first')
     const depositAmt = parseUnits(vaultDepositInput, USDC_DECIMALS)
+
+    if (providerType === 'circle') {
+      const toastId = toast.loading('Initiating USDC approval challenge...')
+      executeContractWriteViaCircle(
+        USDC_ADDRESS_ARC,
+        'approve(address,uint256)',
+        [AUTO_FACTOR_VAULT_ADDRESS, depositAmt.toString()]
+      ).then(() => {
+        toast.loading('USDC allowance approved! Initiating Vault deposit challenge...', { id: toastId })
+        return executeContractWriteViaCircle(
+          AUTO_FACTOR_VAULT_ADDRESS,
+          'deposit(uint256,address)',
+          [depositAmt.toString(), address as string]
+        )
+      }).then((txHash) => {
+        toast.success('Deposited successfully into AutoFactorVault!', {
+          id: toastId,
+          action: { label: 'View', onClick: () => window.open(getExplorerTxLink(txHash), '_blank') }
+        })
+        setVaultDepositInput('')
+        refetchAllVaultState()
+      }).catch((err) => {
+        toast.error('Deposit failed', { id: toastId, description: err.message.slice(0, 85) })
+      })
+      return
+    }
 
     approveToken({
       address: USDC_ADDRESS_ARC, abi: usdcAbi, functionName: 'approve',
@@ -235,7 +435,27 @@ export default function InvestorView() {
   // Vault Actions: Withdrawals
   const handleVaultWithdraw = () => {
     if (!vaultWithdrawInput || Number(vaultWithdrawInput) <= 0) return toast.error('Enter a valid withdraw amount')
+    if (!isConnected || !address) return toast.error('Please connect your wallet first')
     const withdrawAmt = parseUnits(vaultWithdrawInput, USDC_DECIMALS)
+
+    if (providerType === 'circle') {
+      const toastId = toast.loading('Initiating withdraw challenge...')
+      executeContractWriteViaCircle(
+        AUTO_FACTOR_VAULT_ADDRESS,
+        'withdraw(uint256,address,address)',
+        [withdrawAmt.toString(), address as string, address as string]
+      ).then((txHash) => {
+        toast.success('Withdrew successfully from Yield Vault!', {
+          id: toastId,
+          action: { label: 'View', onClick: () => window.open(getExplorerTxLink(txHash), '_blank') }
+        })
+        setVaultWithdrawInput('')
+        refetchAllVaultState()
+      }).catch((err) => {
+        toast.error('Withdrawal failed', { id: toastId, description: err.message.slice(0, 85) })
+      })
+      return
+    }
 
     writeVault({
       address: AUTO_FACTOR_VAULT_ADDRESS,
@@ -255,9 +475,30 @@ export default function InvestorView() {
   // --- Secondary OTC Marketplace Action Handlers ---
   const handleTokenize = () => {
     if (!lookupId) return toast.error('Enter a valid invoice ID')
+    if (!isConnected || !address) return toast.error('Please connect your wallet first')
     if (!inv || inv.amount === BigInt(0)) return toast.error('Invoice details not loaded')
     if (inv.status !== 2) return toast.error('Invoice must be in Funded status to tokenize')
     if (inv.investor.toLowerCase() !== address?.toLowerCase()) return toast.error('Only the invoice investor can tokenize')
+
+    if (providerType === 'circle') {
+      const toastId = toast.loading('Initiating tokenization challenge...')
+      executeContractWriteViaCircle(
+        FACTORFI_CONTRACT_ADDRESS,
+        'tokenizeInvoice(uint256)',
+        [lookupId.toString()]
+      ).then((txHash) => {
+        toast.success('Position successfully wrapped as an ERC-721 Invoice Receipt NFT!', {
+          id: toastId,
+          action: { label: 'View', onClick: () => window.open(getExplorerTxLink(txHash), '_blank') }
+        })
+        refetchIsTokenized()
+        refetchNftOwner()
+        refetchAllVaultState()
+      }).catch((err) => {
+        toast.error('Tokenization failed', { id: toastId, description: err.message.slice(0, 80) })
+      })
+      return
+    }
 
     writeNft({
       address: FACTORFI_CONTRACT_ADDRESS,
@@ -265,8 +506,8 @@ export default function InvestorView() {
       functionName: 'tokenizeInvoice',
       args: [BigInt(lookupId)]
     }, {
-      onSuccess: () => {
-        toast.success('Position successfully wrapped as an ERC-721 Invoice Receipt NFT!')
+      onSuccess: (h) => {
+        toast.success('Position successfully wrapped as an ERC-721 Invoice Receipt NFT!', { action: { label: 'View', onClick: () => window.open(getExplorerTxLink(h), '_blank') } })
         refetchIsTokenized()
         refetchNftOwner()
         refetchAllVaultState()
@@ -277,7 +518,35 @@ export default function InvestorView() {
 
   const handleListInvoice = () => {
     if (!lookupId || !listPriceInput) return toast.error('Enter list price')
+    if (!isConnected || !address) return toast.error('Please connect your wallet first')
     const priceAmt = parseUnits(listPriceInput, 6)
+
+    if (providerType === 'circle') {
+      const toastId = toast.loading('Initiating NFT approval challenge...')
+      executeContractWriteViaCircle(
+        INVOICE_RECEIPT_NFT_ADDRESS,
+        'approve(address,uint256)',
+        [FACTORFI_MARKETPLACE_ADDRESS, lookupId.toString()]
+      ).then(() => {
+        toast.loading('NFT approval confirmed! Initiating OTC listing challenge...', { id: toastId })
+        return executeContractWriteViaCircle(
+          FACTORFI_MARKETPLACE_ADDRESS,
+          'listInvoice(uint256,uint256)',
+          [lookupId.toString(), priceAmt.toString()]
+        )
+      }).then((txHash) => {
+        toast.success('Invoice listed successfully on secondary marketplace!', {
+          id: toastId,
+          action: { label: 'View', onClick: () => window.open(getExplorerTxLink(txHash), '_blank') }
+        })
+        setListPriceInput('')
+        refetchListings()
+        refetchAllVaultState()
+      }).catch((err) => {
+        toast.error('Listing failed', { id: toastId, description: err.message.slice(0, 80) })
+      })
+      return
+    }
 
     // Approve the secondary marketplace contract to transfer the receipt NFT
     writeNft({
@@ -294,8 +563,8 @@ export default function InvestorView() {
           functionName: 'listInvoice',
           args: [BigInt(lookupId), priceAmt]
         }, {
-          onSuccess: () => {
-            toast.success('Invoice listed successfully on secondary marketplace!')
+          onSuccess: (h) => {
+            toast.success('Invoice listed successfully on secondary marketplace!', { action: { label: 'View', onClick: () => window.open(getExplorerTxLink(h), '_blank') } })
             setListPriceInput('')
             refetchListings()
             refetchAllVaultState()
@@ -308,7 +577,37 @@ export default function InvestorView() {
   }
 
   const handleBuyListing = (tokenId: bigint, price: bigint, tokenAddress: string) => {
+    if (!isConnected || !address) return toast.error('Please connect your wallet first')
     const tokenSymbol = getTokenByAddress(tokenAddress)?.symbol || 'USDC'
+
+    if (providerType === 'circle') {
+      const toastId = toast.loading(`Initiating ${tokenSymbol} approval challenge...`)
+      executeContractWriteViaCircle(
+        tokenAddress,
+        'approve(address,uint256)',
+        [FACTORFI_MARKETPLACE_ADDRESS, price.toString()]
+      ).then(() => {
+        toast.loading(`${tokenSymbol} approved! Initiating purchase challenge...`, { id: toastId })
+        return executeContractWriteViaCircle(
+          FACTORFI_MARKETPLACE_ADDRESS,
+          'buyInvoice(uint256)',
+          [tokenId.toString()]
+        )
+      }).then((txHash) => {
+        toast.success('OTC invoice bought successfully! Repayment route is now pointing to you.', {
+          id: toastId,
+          action: { label: 'View', onClick: () => window.open(getExplorerTxLink(txHash), '_blank') }
+        })
+        refetchListings()
+        refetchInvoice()
+        refetchIsTokenized()
+        refetchNftOwner()
+        refetchAllVaultState()
+      }).catch((err) => {
+        toast.error('Purchase failed', { id: toastId, description: err.message.slice(0, 80) })
+      })
+      return
+    }
 
     approveToken({
       address: tokenAddress as `0x${string}`,
@@ -324,8 +623,8 @@ export default function InvestorView() {
           functionName: 'buyInvoice',
           args: [tokenId]
         }, {
-          onSuccess: () => {
-            toast.success('OTC invoice bought successfully! Repayment route is now pointing to you.')
+          onSuccess: (h) => {
+            toast.success('OTC invoice bought successfully! Repayment route is now pointing to you.', { action: { label: 'View', onClick: () => window.open(getExplorerTxLink(h), '_blank') } })
             refetchListings()
             refetchInvoice()
             refetchIsTokenized()
@@ -427,17 +726,19 @@ export default function InvestorView() {
             <span className="badge badge-approved">Scanning Active</span>
           </div>
 
-          <div style={{
-            flex: 1, maxHeight: 290, overflowY: 'auto', background: '#000', border: '1px solid #222', borderRadius: 8,
-            padding: 12, fontFamily: 'var(--ff-mono)', fontSize: 11, color: '#ccc', display: 'flex', flexDirection: 'column', gap: 6
-          }}>
+          <div 
+            ref={logContainerRef}
+            style={{
+              flex: 1, maxHeight: 290, overflowY: 'auto', background: '#000', border: '1px solid #222', borderRadius: 8,
+              padding: 12, fontFamily: 'var(--ff-mono)', fontSize: 11, color: '#ccc', display: 'flex', flexDirection: 'column', gap: 6
+            }}
+          >
             {scanLogs.map((log, idx) => (
               <div key={idx} style={{ display: 'flex', gap: 8, color: log.type === 'success' ? 'var(--ff-success)' : log.type === 'warn' ? 'var(--ff-primary)' : '#888' }}>
                 <span style={{ color: '#555' }}>[{log.time}]</span>
                 <span>{log.msg}</span>
               </div>
             ))}
-            <div ref={logEndRef} />
           </div>
         </div>
       </div>

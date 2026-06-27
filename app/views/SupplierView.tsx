@@ -11,14 +11,64 @@ import { getSmartAccountAddress } from '@/lib/smart-account'
 import { useUnifiedAccount } from '@/lib/web3-provider'
 import { SUPPORTED_TOKENS } from '@/lib/token-registry'
 
+const importWithRetry = async (fn: () => Promise<any>, retriesLeft = 3, interval = 1000): Promise<any> => {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retriesLeft === 0) {
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, interval));
+    return importWithRetry(fn, retriesLeft - 1, interval);
+  }
+};
+
 const MOCK_FILES = [
   { id: 'apple.pdf', name: 'apple_billets_invoice.pdf' },
   { id: 'tesla.pdf', name: 'tesla_chassis_supply_invoice.pdf' }
 ]
 
 export default function SupplierView() {
-  const { address, providerType } = useUnifiedAccount()
+  const { address, isConnected, providerType, circleEmail } = useUnifiedAccount()
   
+  const [envMode, setEnvMode] = useState<'sandbox' | 'testnet'>('testnet')
+  const sdkRef = useRef<any>(null)
+
+  useEffect(() => {
+    const updateEnv = () => {
+      const persisted = localStorage.getItem('ff_environment') || 'testnet'
+      setEnvMode(persisted === 'sandbox' ? 'sandbox' : 'testnet')
+    }
+    updateEnv()
+    window.addEventListener('ff_environment_changed', updateEnv)
+    return () => window.removeEventListener('ff_environment_changed', updateEnv)
+  }, [])
+
+  useEffect(() => {
+    const initSdk = async () => {
+      try {
+        const { W3SSdk } = await importWithRetry(() => import('@circle-fin/w3s-pw-web-sdk'))
+        const appId = process.env.NEXT_PUBLIC_CIRCLE_APP_ID || 'bc7e7dbe-d517-591a-b439-368575473966'
+        const sdk = new W3SSdk({
+          appSettings: { appId }
+        });
+        sdkRef.current = sdk
+        console.log('[SupplierView Circle SDK] SDK instance created successfully')
+
+        // Fetch device ID to initialize iframe session
+        sdk.getDeviceId().then((id: string) => {
+          localStorage.setItem('deviceId', id)
+          console.log('[SupplierView Circle SDK] getDeviceId success:', id)
+        }).catch((err: any) => {
+          console.warn('[SupplierView Circle SDK] getDeviceId on init deferred/failed:', err)
+        })
+      } catch (err) {
+        console.error('[SupplierView Circle SDK] Failed to initialize Web SDK:', err)
+      }
+    }
+    initSdk()
+  }, [])
+
   // Selected Currency Stablecoin State
   const [selectedToken, setSelectedToken] = useState('USDC')
 
@@ -86,9 +136,50 @@ export default function SupplierView() {
     fetchGatewayData()
   }, [address])
 
+  // Poll status endpoint for txHash using challengeId
+  // After the user signs the challenge, the backend resolves transactionId
+  // from challenge.correlationIds and queries the transaction status.
+  const pollTxHash = async (chalId: string): Promise<string> => {
+    let consecutiveErrors = 0
+    for (let attempt = 1; attempt <= 60; attempt++) {
+      try {
+        const statusRes = await fetch(`/api/wallets/user/tx-status?email=${circleEmail}&challengeId=${chalId}`)
+        if (statusRes.ok) {
+          consecutiveErrors = 0 // Reset on success
+          const statusData = await statusRes.json()
+          if (statusData.txHash) {
+            return statusData.txHash
+          }
+          if (statusData.state === 'FAILED' || statusData.state === 'DENIED' || statusData.state === 'CANCELLED') {
+            throw new Error(`Transaction ended in terminal state: ${statusData.state}. ${statusData.errorDetails || ''}`)
+          }
+        } else {
+          consecutiveErrors++
+          console.warn(`[pollTxHash] Attempt ${attempt}: HTTP ${statusRes.status} (${consecutiveErrors} consecutive errors)`)
+          if (consecutiveErrors >= 5) {
+            const errorBody = await statusRes.json().catch(() => ({ details: 'Unknown server error' }))
+            throw new Error(`Server error after ${consecutiveErrors} retries: ${errorBody.details || statusRes.statusText}`)
+          }
+        }
+      } catch (err: any) {
+        // Re-throw terminal errors, but swallow transient fetch errors
+        if (err.message.includes('terminal state') || err.message.includes('Server error after')) {
+          throw err
+        }
+        consecutiveErrors++
+        console.warn(`[pollTxHash] Attempt ${attempt}: fetch error (${consecutiveErrors} consecutive):`, err.message)
+        if (consecutiveErrors >= 5) {
+          throw new Error(`Network error during transaction polling: ${err.message}`)
+        }
+      }
+      await new Promise(r => setTimeout(r, 3000))
+    }
+    throw new Error('Transaction polling timed out (hash not found after 3 minutes)')
+  }
+
   // Process nanopayments deposit to backend
   const handleDeposit = async () => {
-    if (!address) return toast.error('Connect wallet first')
+    if (!isConnected || !address) return toast.error('Please connect your wallet first')
     const parsedAmount = parseFloat(depositAmount)
     if (isNaN(parsedAmount) || parsedAmount <= 0) return toast.error('Invalid deposit amount')
 
@@ -96,34 +187,137 @@ export default function SupplierView() {
     const toastId = toast.loading('Initiating USDC deposit transaction...')
 
     if (providerType === 'circle') {
-      // Circle Programmable Wallet instant credit sandbox bypass
-      try {
-        const mockHash = '0xmock_circle_deposit_' + Date.now().toString(16) + Math.random().toString(16).slice(2, 8)
-        
-        await new Promise(r => setTimeout(r, 1200))
+      if (envMode === 'sandbox') {
+        // Circle Programmable Wallet instant credit sandbox bypass
+        try {
+          const mockHash = '0xmock_circle_deposit_' + Date.now().toString(16) + Math.random().toString(16).slice(2, 8)
+          
+          await new Promise(r => setTimeout(r, 1200))
 
-        const response = await fetch('/api/underwrite/gateway/deposit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            address,
-            amount: parsedAmount,
-            txHash: mockHash
+          const response = await fetch('/api/underwrite/gateway/deposit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              address,
+              amount: parsedAmount,
+              txHash: mockHash
+            })
           })
-        })
 
-        if (response.ok) {
-          toast.success(`Sandbox Deposit of ${depositAmount} USDC credited successfully!`, { id: toastId })
-          fetchGatewayData()
-        } else {
-          toast.error('Failed to register deposit on backend', { id: toastId })
+          if (response.ok) {
+            toast.success(`Sandbox Deposit of ${depositAmount} USDC credited successfully!`, { id: toastId })
+            fetchGatewayData()
+          } else {
+            toast.error('Failed to register deposit on backend', { id: toastId })
+          }
+          setDepositing(false)
+        } catch (err: any) {
+          toast.error(`Error: ${err.message}`, { id: toastId })
+          setDepositing(false)
         }
-        setDepositing(false)
-      } catch (err: any) {
-        toast.error(`Error: ${err.message}`, { id: toastId })
-        setDepositing(false)
+        return
+      } else {
+        // Real on-chain Circle wallet deposit
+        if (!circleEmail) {
+          toast.error('Circle email session not found. Please log in again.', { id: toastId })
+          setDepositing(false)
+          return
+        }
+
+        const sdk = sdkRef.current
+        if (!sdk) {
+          toast.error('Circle Security Web SDK is not loaded. Please refresh.', { id: toastId })
+          setDepositing(false)
+          return
+        }
+
+        try {
+          toast.loading('Requesting security challenge from Circle API...', { id: toastId })
+
+          // 1. Get challenge details from backend
+          const initRes = await fetch('/api/wallets/user/deposit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: circleEmail,
+              amount: parsedAmount
+            })
+          })
+
+          const initData = await initRes.json()
+          if (!initRes.ok) {
+            throw new Error(initData.details || initData.error || 'Failed to create deposit challenge')
+          }
+
+          const { challengeId, userToken, encryptionKey } = initData
+
+          toast.loading('Awaiting user PIN confirmation...', { id: toastId })
+
+          // Ensure deviceId is retrieved and iframe connection is established before execute
+          try {
+            const storedDeviceId = localStorage.getItem('deviceId')
+            if (!storedDeviceId) {
+              const id = await sdk.getDeviceId()
+              localStorage.setItem('deviceId', id)
+              console.log('[SupplierView Circle SDK] getDeviceId before execute success:', id)
+            }
+          } catch (deviceErr: any) {
+            console.warn('[SupplierView Circle SDK] getDeviceId before execute warning:', deviceErr)
+          }
+
+          // 2. Execute PIN prompt via Web SDK
+          sdk.setAuthentication({ userToken, encryptionKey })
+          
+          sdk.execute(challengeId, async (error: any, result: any) => {
+            if (error) {
+              console.error('[Circle Web SDK] Execute error details:', {
+                code: error?.code,
+                message: error?.message,
+                error: error
+              })
+              toast.error('Deposit challenge failed: ' + (error?.message || error?.code || 'Process cancelled.'), { id: toastId })
+              setDepositing(false)
+              return
+            }
+
+            try {
+              toast.loading('PIN verified! Broadcasting transaction to Arc...', { id: toastId })
+
+              // 3. Poll for txHash on-chain (using challengeId — backend resolves transactionId)
+              const txHash = await pollTxHash(challengeId)
+              toast.loading('Confirming transaction on-chain...', { id: toastId })
+
+              // 4. Register final deposit
+              await new Promise(r => setTimeout(r, 2000))
+              const response = await fetch('/api/underwrite/gateway/deposit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  address,
+                  amount: parsedAmount,
+                  txHash
+                })
+              })
+
+              if (response.ok) {
+                toast.success(`Deposited ${depositAmount} USDC successfully via Circle Wallet!`, { id: toastId })
+                fetchGatewayData()
+              } else {
+                toast.error('Failed to register deposit on backend', { id: toastId })
+              }
+            } catch (pollErr: any) {
+              toast.error(`Transaction verification failed: ${pollErr.message}`, { id: toastId })
+            } finally {
+              setDepositing(false)
+            }
+          })
+
+        } catch (err: any) {
+          toast.error(`Error: ${err.message}`, { id: toastId })
+          setDepositing(false)
+        }
+        return
       }
-      return
     }
 
     try {
@@ -310,7 +504,7 @@ export default function SupplierView() {
 
   // 2. Submit Transaction flow (supporting signatures)
   const handleSubmit = async () => {
-    if (!address) return toast.error('Connect wallet first')
+    if (!isConnected || !address) return toast.error('Please connect your wallet first')
     if (!anchorAddr || !amount || !dueDate) return toast.error('Fill all required fields')
     
     // Fallbacks if no OCR signature is present (e.g. manual bypass)
