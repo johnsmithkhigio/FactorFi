@@ -182,7 +182,7 @@ export default function LandingView({ onLaunchApp }: LandingViewProps) {
           }}>
             <video 
               ref={videoRef}
-              src="/video/demo.mp4" 
+              src="/demo.mp4" 
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               playsInline
               loop
