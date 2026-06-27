@@ -31,6 +31,7 @@ export const metadata: Metadata = {
     ],
   },
   manifest: '/site.webmanifest',
+  metadataBase: new URL('https://factorfi.protocol'),
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
