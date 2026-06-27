@@ -1,14 +1,73 @@
-'use client'
-
 import MarketingHeader from '../../components/MarketingHeader'
 import MarketingFooter from '../../components/MarketingFooter'
 import Breadcrumbs from '../../components/Breadcrumbs'
 import RelatedContent from '../../components/RelatedContent'
 import { FileText } from 'lucide-react'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Terms of Service | FactorFi — On-Chain Reverse Factoring',
+  description: 'Read the terms of service governing the use of the FactorFi reverse-factoring protocol, smart contracts, invoice underwriting, and stablecoin payouts on the Arc network.',
+  keywords: ['Terms of Service', 'Protocol Policy', 'Underwriter Rules', 'Smart Contract Interactions', 'Circle Wallets Policy'],
+  alternates: {
+    canonical: 'https://factorfi.protocol/legal/terms',
+  },
+  openGraph: {
+    title: 'Terms of Service | FactorFi — On-Chain Reverse Factoring',
+    description: 'Read the terms of service governing the use of the FactorFi reverse-factoring protocol, smart contracts, invoice underwriting, and stablecoin payouts on the Arc network.',
+    url: 'https://factorfi.protocol/legal/terms',
+    siteName: 'FactorFi Protocol',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Terms of Service | FactorFi — On-Chain Reverse Factoring',
+    description: 'Read the terms of service governing the use of the FactorFi reverse-factoring protocol.',
+  },
+}
 
 export default function TermsPage() {
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    'itemListElement': [
+      {
+        '@type': 'ListItem',
+        'position': 1,
+        'name': 'Home',
+        'item': 'https://factorfi.protocol'
+      },
+      {
+        '@type': 'ListItem',
+        'position': 2,
+        'name': 'Terms of Service',
+        'item': 'https://factorfi.protocol/legal/terms'
+      }
+    ]
+  }
+
+  const termsPageSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    '@id': 'https://factorfi.protocol/legal/terms#webpage',
+    'url': 'https://factorfi.protocol/legal/terms',
+    'name': 'Terms of Service | FactorFi',
+    'description': 'Protocol rules and terms of service for the FactorFi reverse-factoring invoice finance platform.',
+    'breadcrumb': {
+      '@id': 'https://factorfi.protocol/legal/terms#breadcrumb'
+    }
+  }
+
   return (
     <div className="app-shell" style={{ background: 'var(--ff-bg)', color: 'var(--ff-text)' }}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(termsPageSchema) }}
+      />
       <MarketingHeader />
 
       <main id="main-content" style={{ maxWidth: 800, margin: '20px auto 60px', width: '100%', padding: '0 24px', flex: 1 }}>

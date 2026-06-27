@@ -1,14 +1,73 @@
-'use client'
-
 import MarketingHeader from '../../components/MarketingHeader'
 import MarketingFooter from '../../components/MarketingFooter'
 import Breadcrumbs from '../../components/Breadcrumbs'
 import RelatedContent from '../../components/RelatedContent'
 import { ShieldAlert } from 'lucide-react'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Privacy Policy | FactorFi — On-Chain Reverse Factoring',
+  description: 'Read the privacy policy of FactorFi to understand how transaction metadata, compliance screening, and off-chain invoice ingestion are handled on the Arc network.',
+  keywords: ['Privacy Policy', 'Data Security', 'On-Chain Hashing', 'OFAC Screening Data', 'Arc Ledger Privacy'],
+  alternates: {
+    canonical: 'https://factorfi.protocol/legal/privacy',
+  },
+  openGraph: {
+    title: 'Privacy Policy | FactorFi — On-Chain Reverse Factoring',
+    description: 'Read the privacy policy of FactorFi to understand how transaction metadata, compliance screening, and off-chain invoice ingestion are handled on the Arc network.',
+    url: 'https://factorfi.protocol/legal/privacy',
+    siteName: 'FactorFi Protocol',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Privacy Policy | FactorFi — On-Chain Reverse Factoring',
+    description: 'Read the privacy policy of FactorFi to understand how data is processed on the Arc network.',
+  },
+}
 
 export default function PrivacyPage() {
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    'itemListElement': [
+      {
+        '@type': 'ListItem',
+        'position': 1,
+        'name': 'Home',
+        'item': 'https://factorfi.protocol'
+      },
+      {
+        '@type': 'ListItem',
+        'position': 2,
+        'name': 'Privacy Policy',
+        'item': 'https://factorfi.protocol/legal/privacy'
+      }
+    ]
+  }
+
+  const privacyPageSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    '@id': 'https://factorfi.protocol/legal/privacy#webpage',
+    'url': 'https://factorfi.protocol/legal/privacy',
+    'name': 'Privacy Policy | FactorFi',
+    'description': 'Understand how data hashing, compliance screening, and database storage are handled on the FactorFi platform.',
+    'breadcrumb': {
+      '@id': 'https://factorfi.protocol/legal/privacy#breadcrumb'
+    }
+  }
+
   return (
     <div className="app-shell" style={{ background: 'var(--ff-bg)', color: 'var(--ff-text)' }}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(privacyPageSchema) }}
+      />
       <MarketingHeader />
 
       <main id="main-content" style={{ maxWidth: 800, margin: '20px auto 60px', width: '100%', padding: '0 24px', flex: 1 }}>
