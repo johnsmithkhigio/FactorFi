@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useWalletClient, useAccount } from 'wagmi'
+import { useWalletClient } from 'wagmi'
 import { ArrowRight, Globe, CheckCircle, CircleDashed, ExternalLink, Activity, RefreshCw, AlertTriangle, ShieldCheck, Download } from 'lucide-react'
+import { useUnifiedAccount } from '@/lib/web3-provider'
 import { toast } from 'sonner'
 import { CCTPBridgeService, CCTP_CHAINS, CachedTransfer } from '@/lib/cctp-service'
 import { createPublicClient, http, formatUnits, parseUnits } from 'viem'
@@ -36,7 +37,7 @@ export default function BridgeView() {
   const [resumingId, setResumingId] = useState<string | null>(null)
   
   const { data: walletClient } = useWalletClient()
-  const { address: userAddress } = useAccount()
+  const { address: userAddress, isConnected } = useUnifiedAccount()
 
   // Load cached transfers from LocalStorage on mount
   useEffect(() => {
@@ -50,7 +51,8 @@ export default function BridgeView() {
   // Handles real Circle SDK CCTP bridging
   const handleBridge = async () => {
     if (!amount || Number(amount) <= 0) return toast.error('Enter a valid amount')
-    if (!walletClient) return toast.error('Please connect your wallet')
+    if (!isConnected || !userAddress) return toast.error('Please connect your wallet first')
+    if (!walletClient) return toast.error('Wallet client not available. Try reconnecting your wallet.')
     
     setBridgeLogs([])
     const transferId = 'cctp_' + Date.now()
@@ -155,7 +157,8 @@ export default function BridgeView() {
 
   // Automatic CCTP Error Recovery Resumer using App Kit retry API
   const handleResumeTransfer = async (tx: CachedTransfer) => {
-    if (!walletClient) return toast.error('Connect wallet to resume CCTP transaction')
+    if (!isConnected || !userAddress) return toast.error('Please connect your wallet first')
+    if (!walletClient) return toast.error('Wallet client not available. Try reconnecting.')
     setResumingId(tx.id)
     setBridgeLogs([])
     setStep(tx.status as BridgeStep)
