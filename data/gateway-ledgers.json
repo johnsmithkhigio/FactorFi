@@ -1,7 +1,8 @@
 {
   "balances": {
     "0x70997970c51812dc3a010c7d01b50e0d17dc79c8": 0.05,
-    "0xdaf164e74b6b566d55fa2941911a33edb49ae6c5": 0.0498
+    "0xdaf164e74b6b566d55fa2941911a33edb49ae6c5": 0.1996,
+    "0xd611804e58eab6a06a551bb225d1f77712b4a3d0": 0.0999
   },
   "transactions": [
     {
@@ -25,6 +26,67 @@
       "amount": 0.0001,
       "timestamp": 1782479456870,
       "description": "Underwriter AI request: 27339"
+    },
+    {
+      "address": "0xdaf164e74b6b566d55fa2941911a33edb49ae6c5",
+      "type": "deposit",
+      "amount": 0.05,
+      "timestamp": 1782485173383,
+      "description": "Deposited 0.05 USDC via Gateway Portal",
+      "txHash": "0xmock_circle_deposit_19f046524155b28ba"
+    },
+    {
+      "address": "0xdaf164e74b6b566d55fa2941911a33edb49ae6c5",
+      "type": "deposit",
+      "amount": 0.05,
+      "timestamp": 1782485190945,
+      "description": "Deposited 0.05 USDC via Gateway Portal",
+      "txHash": "0xmock_circle_deposit_19f0465846b66d1ce"
+    },
+    {
+      "address": "0xdaf164e74b6b566d55fa2941911a33edb49ae6c5",
+      "type": "deposit",
+      "amount": 0.05,
+      "timestamp": 1782485199859,
+      "description": "Deposited 0.05 USDC via Gateway Portal",
+      "txHash": "0xmock_circle_deposit_19f0465a73bfc03a5"
+    },
+    {
+      "address": "0xdaf164e74b6b566d55fa2941911a33edb49ae6c5",
+      "type": "spend",
+      "amount": 0.0001,
+      "timestamp": 1782487001768,
+      "description": "Underwriter AI request: 644247"
+    },
+    {
+      "address": "0xdaf164e74b6b566d55fa2941911a33edb49ae6c5",
+      "type": "spend",
+      "amount": 0.0001,
+      "timestamp": 1782487108699,
+      "description": "Underwriter AI request: 19268"
+    },
+    {
+      "address": "0xd611804e58eab6a06a551bb225d1f77712b4a3d0",
+      "type": "deposit",
+      "amount": 0.05,
+      "timestamp": 1782555806252,
+      "description": "Complimentary trial credits for AI Underwriting",
+      "txHash": "0xwelcomecredits"
+    },
+    {
+      "address": "0xd611804e58eab6a06a551bb225d1f77712b4a3d0",
+      "type": "spend",
+      "amount": 0.0001,
+      "timestamp": 1782555824737,
+      "description": "Underwriter AI request: 434949"
+    },
+    {
+      "address": "0xd611804e58eab6a06a551bb225d1f77712b4a3d0",
+      "type": "deposit",
+      "amount": 0.05,
+      "timestamp": 1782555887809,
+      "description": "Deposited 0.05 USDC via Gateway Portal",
+      "txHash": "0xd7a497d63207783fc70289d18a38a80d3ca15ef25194359e46d5500c39e9e92d"
     }
   ]
 }

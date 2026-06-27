@@ -78,6 +78,14 @@ export default function EmbeddedAuth({ headless = false }: EmbeddedAuthProps) {
         });
         sdkRef.current = sdk
         console.log('[Circle Web SDK] SDK instance created successfully')
+
+        // Fetch device ID to initialize iframe session
+        sdk.getDeviceId().then((id: string) => {
+          localStorage.setItem('deviceId', id)
+          console.log('[Circle Web SDK] getDeviceId success:', id)
+        }).catch((err: any) => {
+          console.warn('[Circle Web SDK] getDeviceId on init deferred/failed:', err)
+        })
       } catch (err) {
         console.error('[Circle Web SDK] Failed to initialize Web SDK:', err)
       }
@@ -131,13 +139,25 @@ export default function EmbeddedAuth({ headless = false }: EmbeddedAuthProps) {
   }
 
   // 2. Execute secure PIN setup challenge via Circle's overlay UI
-  const handleExecutePinChallenge = () => {
+  const handleExecutePinChallenge = async () => {
     const sdk = sdkRef.current
     if (!sdk || !tempSession?.challengeId || !tempSession?.userToken || !tempSession?.encryptionKey) {
       return toast.error('Circle SDK is not ready or missing session credentials.')
     }
 
     setIsLoading(true)
+
+    // Ensure we retrieve/trigger device ID check so the SDK internal iframe finishes registering the device before execute
+    try {
+      const storedDeviceId = localStorage.getItem('deviceId')
+      if (!storedDeviceId) {
+        const id = await sdk.getDeviceId()
+        localStorage.setItem('deviceId', id)
+        console.log('[Circle Web SDK] getDeviceId before execute success:', id)
+      }
+    } catch (deviceErr: any) {
+      console.warn('[Circle Web SDK] getDeviceId before execute warning:', deviceErr)
+    }
     
     sdk.setAuthentication({
       userToken: tempSession.userToken,
@@ -147,8 +167,12 @@ export default function EmbeddedAuth({ headless = false }: EmbeddedAuthProps) {
     sdk.execute(tempSession.challengeId, async (error: any, result: any) => {
       if (error) {
         setIsLoading(false)
-        console.error('[Circle Web SDK] Execute error:', error)
-        toast.error('Challenge failed: ' + (error.message || 'Process cancelled by user.'))
+        console.error('[Circle Web SDK] Execute error details:', {
+          code: error?.code,
+          message: error?.message,
+          error: error
+        })
+        toast.error('Challenge failed: ' + (error?.message || error?.code || 'Process cancelled by user.'))
         return
       }
 
