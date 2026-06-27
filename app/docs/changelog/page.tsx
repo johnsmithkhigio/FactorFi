@@ -1,11 +1,87 @@
-'use client'
-
 import React from 'react'
-import { Sparkles, Hammer, ShieldAlert, Cpu, ArrowUpRight } from 'lucide-react'
+import { Sparkles, Cpu, ShieldAlert } from 'lucide-react'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Changelog & Release Notes | FactorFi Docs',
+  description: 'Track the latest feature updates, security patches, smart contract deployments, and client SDK adjustments for the FactorFi reverse factoring platform.',
+  keywords: ['FactorFi Changelog', 'SDK Release Notes', 'Smart Contract Upgrades', 'Arc Testnet Deployments'],
+  alternates: {
+    canonical: 'https://factorfi.protocol/docs/changelog',
+  },
+  openGraph: {
+    title: 'Changelog & Release Notes | FactorFi Docs',
+    description: 'Track the latest feature updates, security patches, smart contract deployments, and client SDK adjustments for the FactorFi reverse factoring platform.',
+    url: 'https://factorfi.protocol/docs/changelog',
+    siteName: 'FactorFi Protocol',
+    images: [
+      {
+        url: 'https://factorfi.protocol/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'FactorFi Release Changelog',
+      },
+    ],
+    type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Changelog & Release Notes | FactorFi Docs',
+    description: 'Track the latest updates and release versions of the FactorFi protocol.',
+    images: ['https://factorfi.protocol/og-image.png'],
+  },
+}
 
 export default function ChangelogDocs() {
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    'itemListElement': [
+      {
+        '@type': 'ListItem',
+        'position': 1,
+        'name': 'Home',
+        'item': 'https://factorfi.protocol'
+      },
+      {
+        '@type': 'ListItem',
+        'position': 2,
+        'name': 'Docs',
+        'item': 'https://factorfi.protocol/docs'
+      },
+      {
+        '@type': 'ListItem',
+        'position': 3,
+        'name': 'Changelog',
+        'item': 'https://factorfi.protocol/docs/changelog'
+      }
+    ]
+  }
+
+  const techArticleSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'TechArticle',
+    'headline': 'Changelog & Release Notes | FactorFi Docs',
+    'description': 'Product changelog tracking all development releases, bug fixes, and security patches for FactorFi protocol.',
+    'url': 'https://factorfi.protocol/docs/changelog',
+    'inLanguage': 'en-US',
+    'articleSection': 'Release Notes',
+    'author': {
+      '@type': 'Organization',
+      'name': 'FactorFi Protocol'
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 48 }}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(techArticleSchema) }}
+      />
       
       {/* Header */}
       <div>
