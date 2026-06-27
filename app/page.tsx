@@ -79,6 +79,18 @@ export default function FactorFiApp() {
     }
   }, [])
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      if (activeView === 'landing') {
+        url.searchParams.delete('view')
+      } else {
+        url.searchParams.set('view', activeView)
+      }
+      window.history.replaceState({}, '', url.pathname + url.search)
+    }
+  }, [activeView])
+
   const { data: usdcBalance } = useReadContract({
     address: USDC_ADDRESS_ARC,
     abi: usdcAbi,

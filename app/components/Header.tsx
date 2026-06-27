@@ -54,7 +54,7 @@ export default function Header({
 
   // Active configurations
   const [activeWorkspace, setActiveWorkspace] = useState(WORKSPACES[1]) // Sandbox Corp default
-  const [activeEnvironment, setActiveEnvironment] = useState(ENVIRONMENTS[1]) // Sandbox Mode default
+  const [activeEnvironment, setActiveEnvironment] = useState(ENVIRONMENTS[2]) // ARC Testnet L1 default as requested!
 
   // Notification state
   const [unreadNotifications, setUnreadNotifications] = useState(true)
@@ -116,6 +116,21 @@ export default function Header({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Sync environment with local storage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const persisted = localStorage.getItem('ff_environment')
+      if (persisted) {
+        const env = ENVIRONMENTS.find(e => e.id === persisted)
+        if (env) {
+          setActiveEnvironment(env)
+        }
+      } else {
+        localStorage.setItem('ff_environment', 'testnet')
+      }
+    }
+  }, [])
+
   // Trigger login modal via custom event
   const triggerLoginModal = () => {
     window.dispatchEvent(new Event('open-circle-auth'))
@@ -136,6 +151,8 @@ export default function Header({
   // Handle Environment Switch
   const handleEnvironmentSwitch = (env: typeof ENVIRONMENTS[0]) => {
     setActiveEnvironment(env)
+    localStorage.setItem('ff_environment', env.id)
+    window.dispatchEvent(new Event('ff_environment_changed'))
     setShowEnvMenu(false)
     toast.info(`Environment switched to: ${env.label}`)
   }
