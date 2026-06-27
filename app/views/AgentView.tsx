@@ -29,6 +29,7 @@ interface Message {
   model?: string
   latency?: number
   confidence?: number
+  isNew?: boolean
   evidence?: {
     liquidity: string
     tvl: string
@@ -319,11 +320,24 @@ interface ActionBlockCardProps {
     params?: any
   }
   setActiveView?: (viewId: any) => void
+  isNew?: boolean
 }
 
-const ActionBlockCard = ({ data, setActiveView }: ActionBlockCardProps) => {
+const importWithRetry = async (fn: () => Promise<any>, retriesLeft = 3, interval = 1000): Promise<any> => {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retriesLeft === 0) {
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, interval));
+    return importWithRetry(fn, retriesLeft - 1, interval);
+  }
+};
+
+const ActionBlockCard = ({ data, setActiveView, isNew }: ActionBlockCardProps) => {
   const { type, params = {} } = data
-  const { address } = useUnifiedAccount()
+  const { address, providerType, circleEmail } = useUnifiedAccount()
   const publicClient = usePublicClient()
   const { writeContractAsync } = useWriteContract()
 
@@ -414,12 +428,70 @@ const ActionBlockCard = ({ data, setActiveView }: ActionBlockCardProps) => {
     try {
       if (type === 'REGISTER_BUYER') {
         if (!companyName) throw new Error('Company name is required')
-        const hash = await writeContractAsync({
-          address: FACTORFI_CONTRACT_ADDRESS,
-          abi: factorFiAbi,
-          functionName: 'registerAnchor',
-          args: [companyName, BigInt(creditRating)]
-        })
+        let hash = ''
+        if (providerType === 'circle') {
+          // Circle User-Controlled Wallet flow
+          if (!circleEmail) throw new Error('Circle session not found. Please log in.')
+          const initRes = await fetch('/api/wallets/user/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: circleEmail,
+              contractAddress: FACTORFI_CONTRACT_ADDRESS,
+              abiFunctionSignature: 'registerAnchor(string,uint256)',
+              abiParameters: [companyName, creditRating.toString()]
+            })
+          })
+          const initData = await initRes.json()
+          if (!initRes.ok) throw new Error(initData.details || initData.error || 'Failed to create execution challenge')
+          const { challengeId, userToken, encryptionKey } = initData
+
+          const { W3SSdk } = await importWithRetry(() => import('@circle-fin/w3s-pw-web-sdk'))
+          const appId = process.env.NEXT_PUBLIC_CIRCLE_APP_ID || 'bc7e7dbe-d517-591a-b439-368575473966'
+          const sdk = new W3SSdk({ appSettings: { appId } })
+          sdk.setAuthentication({ userToken, encryptionKey })
+
+          hash = await new Promise<string>((resolve, reject) => {
+            sdk.execute(challengeId, async (error: any, result: any) => {
+              if (error) {
+                reject(new Error(error.message || 'User cancelled verification.'))
+                return
+              }
+              try {
+                // Poll tx-status
+                let consecutiveErrors = 0
+                for (let attempt = 1; attempt <= 60; attempt++) {
+                  try {
+                    const statusRes = await fetch(`/api/wallets/user/tx-status?email=${circleEmail}&challengeId=${challengeId}`)
+                    if (statusRes.ok) {
+                      const statusData = await statusRes.json()
+                      if (statusData.txHash) {
+                        resolve(statusData.txHash)
+                        return
+                      }
+                      if (statusData.state === 'FAILED' || statusData.state === 'DENIED' || statusData.state === 'CANCELLED') {
+                        reject(new Error(`Transaction failed: ${statusData.state}`))
+                        return
+                      }
+                    }
+                  } catch (e) {}
+                  await new Promise(r => setTimeout(r, 3000))
+                }
+                reject(new Error('Transaction polling timed out.'))
+              } catch (e) {
+                reject(e)
+              }
+            })
+          })
+        } else {
+          // Standard EOA flow
+          hash = await writeContractAsync({
+            address: FACTORFI_CONTRACT_ADDRESS,
+            abi: factorFiAbi,
+            functionName: 'registerAnchor',
+            args: [companyName, BigInt(creditRating)]
+          })
+        }
         setTxHash(hash)
         setSuccess(true)
         toast.success(`Successfully registered ${companyName} as corporate buyer on Arc!`)
@@ -685,12 +757,12 @@ const ActionBlockCard = ({ data, setActiveView }: ActionBlockCardProps) => {
   }
 
   useEffect(() => {
-    // Auto-run read-only, navigation, or document tasks immediately on mount
+    // Auto-run read-only, navigation, or document tasks immediately on mount ONLY IF message is new
     const autoExecTypes = ['NAVIGATE_TAB', 'DEPLOY_CONTRACT', 'GENERATE_README', 'ANALYZE_REPO', 'CREATE_API_KEY', 'VERIFY_WALLET']
-    if (autoExecTypes.includes(type) && !success && !loading && !error) {
+    if (isNew && autoExecTypes.includes(type) && !success && !loading && !error) {
       handleAction()
     }
-  }, [])
+  }, [isNew])
 
   return (
     <div style={{
@@ -1252,7 +1324,7 @@ const ActionBlockCard = ({ data, setActiveView }: ActionBlockCardProps) => {
   )
 }
 
-const ParsedResponseRenderer = ({ content, setActiveView }: { content: string; setActiveView?: (view: any) => void }) => {
+const ParsedResponseRenderer = ({ content, setActiveView, isNew }: { content: string; setActiveView?: (view: any) => void; isNew?: boolean }) => {
   const blocks = parseAssistantResponse(content)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1270,7 +1342,7 @@ const ParsedResponseRenderer = ({ content, setActiveView }: { content: string; s
           return <TimelineList key={idx} content={block.content} />
         }
         if (block.type === 'action') {
-          return <ActionBlockCard key={idx} data={block.data} setActiveView={setActiveView} />
+          return <ActionBlockCard key={idx} data={block.data} setActiveView={setActiveView} isNew={isNew} />
         }
         return <p key={idx} style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: 'var(--ff-text-secondary)' }}>{formatText(block.content)}</p>
       })}
@@ -1333,7 +1405,11 @@ export default function AgentView({ setActiveView }: { setActiveView?: (view: an
         try {
           const parsed = JSON.parse(stored)
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setSessions(parsed)
+            const sanitized = parsed.map((session: any) => ({
+              ...session,
+              messages: session.messages.map((m: any) => ({ ...m, isNew: false }))
+            }))
+            setSessions(sanitized)
           }
         } catch (e) {
           console.error('Failed to parse sessions from localStorage', e)
@@ -1422,9 +1498,15 @@ export default function AgentView({ setActiveView }: { setActiveView?: (view: an
 
   const currentSession = sessions.find(s => s.id === currentSessionId) || sessions[0]
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      })
+    }
   }, [currentSession?.messages])
 
   // New Chat trigger
@@ -1631,6 +1713,7 @@ export default function AgentView({ setActiveView }: { setActiveView?: (view: an
           model: data.model || 'mock',
           latency,
           confidence: 94, // 94% confidence level
+          isNew: true,
           evidence: {
             liquidity: 'Healthy',
             tvl: '$8.45M',
@@ -2063,7 +2146,7 @@ export default function AgentView({ setActiveView }: { setActiveView?: (view: an
           </div>
 
           {/* Active Chat workspace */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '24px 20px', background: '#020202', display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div ref={chatContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '24px 20px', background: '#020202', display: 'flex', flexDirection: 'column', gap: 24 }}>
             {currentSession.messages.length <= 1 ? (
               
               /* REDESIGNED EMPTY STATE WITH ONBOARDING HEURISTICS */
@@ -2198,7 +2281,7 @@ export default function AgentView({ setActiveView }: { setActiveView?: (view: an
                       {/* Content rendering */}
                       <div style={{ fontSize: 13.5 }}>
                         {msg.role === 'assistant' ? (
-                          <ParsedResponseRenderer content={msg.content} setActiveView={setActiveView} />
+                          <ParsedResponseRenderer content={msg.content} setActiveView={setActiveView} isNew={msg.isNew} />
                         ) : (
                           <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
                         )}
