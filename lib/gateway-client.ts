@@ -115,10 +115,9 @@ export const GatewayClient = {
       throw new Error('Transaction failed on-chain')
     }
 
-    // Verify receipt target is the USDC token contract on Arc
-    if (receipt.to?.toLowerCase() !== USDC_ADDRESS_ARC.toLowerCase()) {
-      throw new Error('Transaction target is not the USDC token contract')
-    }
+    // Note: Circle User-Controlled Wallets use ERC-4337 account abstraction,
+    // so receipt.to is the EntryPoint contract (0x5ff1...), not the token contract.
+    // We validate the USDC transfer via event log parsing below instead.
 
     // Parse logs to find Transfer(from, to, value)
     let totalUsdcTransferred = BigInt(0)
