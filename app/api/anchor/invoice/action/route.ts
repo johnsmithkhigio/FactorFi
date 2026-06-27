@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { CircleDevWalletsManager } from '@/lib/circle-dev-wallets'
+import { initiateUserControlledWalletsClient } from '@circle-fin/user-controlled-wallets'
 import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi, USDC_ADDRESS_ARC, usdcAbi } from '@/lib/contracts'
 import { createPublicClient, http } from 'viem'
 import { arcTestnet } from '@/lib/arc-config'
 
 export const dynamic = 'force-dynamic'
 
+const circleClient = initiateUserControlledWalletsClient({
+  apiKey: process.env.CIRCLE_API_KEY!,
+})
+
 export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get('Authorization')
-    const { action, invoiceId, encryptedKey, apiKey } = await req.json()
+    const { action, invoiceId, encryptedKey, apiKey, userToken } = await req.json()
 
     // 1. Bearer Token Authorization
     const token = authHeader ? authHeader.replace(/^Bearer\s+/, '') : apiKey
@@ -30,7 +34,7 @@ export async function POST(req: NextRequest) {
           { status: 401 }
         )
       }
-      console.log(`[API Auth] Successfully authenticated corporate client: ${companyName} (${address})`)
+      console.log(`[API Auth] Authenticated: ${companyName} (${address})`)
     } catch (err) {
       return NextResponse.json(
         { error: 'Unauthorized: Failed to decode bearer token' },
@@ -46,34 +50,25 @@ export async function POST(req: NextRequest) {
     }
 
     if (invoiceId === undefined || invoiceId === null) {
-      return NextResponse.json(
-        { error: 'Invoice ID is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invoice ID is required' }, { status: 400 })
     }
 
-    // encryptedKey represents the Circle walletId passed from the Anchor dashboard
     const walletId = encryptedKey
-    if (!walletId) {
+    if (!walletId || !userToken) {
       return NextResponse.json(
-        { error: 'Circle wallet ID is required' },
+        { error: 'Circle wallet ID and userToken are required' },
         { status: 400 }
       )
     }
 
-    console.log(`=== Programmatic Action Request: ${action.toUpperCase()} ===`)
-    console.log('Invoice ID:', invoiceId)
-    console.log('Circle Wallet ID:', walletId)
+    console.log(`=== UCW Action: ${action.toUpperCase()} Invoice #${invoiceId} ===`)
 
-    const manager = CircleDevWalletsManager.getInstance()
     const functionName = action === 'approve' ? 'approveInvoice' : 'settleInvoice'
+    const challenges: string[] = []
 
-    // If settling, we must verify that the corporate wallet has approved USDC allowance first
-    // Since settleInvoice transfers USDC from Anchor to contract, we perform automated approvals
+    // If settling, create USDC approval challenge first
     if (action === 'settle') {
       const publicClient = createPublicClient({ chain: arcTestnet, transport: http() })
-      
-      // Look up invoice amount
       const invoiceData = await publicClient.readContract({
         address: FACTORFI_CONTRACT_ADDRESS,
         abi: factorFiAbi,
@@ -82,43 +77,48 @@ export async function POST(req: NextRequest) {
       }) as any
 
       const amount = invoiceData.amount
+      console.log(`Creating USDC approval challenge for amount: ${amount.toString()}`)
 
-      console.log(`Settle action detected. Executing automatic USDC approval of ${amount.toString()} decimals for FactorFi contract...`)
-      
-      // Perform automated approval from corporate developer-controlled wallet
-      const approveHash = await manager.executeTransaction(
+      const approveRes = await circleClient.createUserTransactionContractExecutionChallenge({
+        userToken,
         walletId,
-        USDC_ADDRESS_ARC,
-        usdcAbi,
-        'approve',
-        [FACTORFI_CONTRACT_ADDRESS, amount]
-      )
-      console.log('Automated USDC Approval transaction confirmed:', approveHash)
+        contractAddress: USDC_ADDRESS_ARC,
+        abiFunctionSignature: 'approve(address,uint256)',
+        abiParameters: [FACTORFI_CONTRACT_ADDRESS, amount.toString()],
+        fee: { type: 'level', config: { feeLevel: 'MEDIUM' } },
+      })
+      const approveChallengeId = (approveRes.data as any)?.challengeId
+      if (approveChallengeId) challenges.push(approveChallengeId)
     }
 
-    // 2. Route the transaction to the serialized queue to execute approve/settle on-chain via Circle API
-    const txHash = await manager.executeTransaction(
+    // Create the main action challenge (approve/settle invoice)
+    const execRes = await circleClient.createUserTransactionContractExecutionChallenge({
+      userToken,
       walletId,
-      FACTORFI_CONTRACT_ADDRESS,
-      factorFiAbi,
-      functionName,
-      [BigInt(invoiceId)]
-    )
+      contractAddress: FACTORFI_CONTRACT_ADDRESS,
+      abiFunctionSignature: functionName === 'approveInvoice'
+        ? 'approveInvoice(uint256)'
+        : 'settleInvoice(uint256)',
+      abiParameters: [invoiceId.toString()],
+      fee: { type: 'level', config: { feeLevel: 'MEDIUM' } },
+    })
+    const mainChallengeId = (execRes.data as any)?.challengeId
+    if (mainChallengeId) challenges.push(mainChallengeId)
 
-    console.log(`Programmatic ${action} completed successfully! Tx Hash:`, txHash)
+    console.log(`Created ${challenges.length} challenge(s) for ${action}`)
 
     return NextResponse.json({
       success: true,
       action,
       invoiceId: Number(invoiceId),
-      hash: txHash,
-      message: `Invoice successfully ${action === 'approve' ? 'approved' : 'settled'} programmatically!`
+      challenges,
+      message: `${challenges.length} challenge(s) created. Execute via W3S SDK to complete.`
     })
 
   } catch (err: any) {
-    console.error('Programmatic invoice action execution failed:', err)
+    console.error('Invoice action failed:', err.response?.data || err)
     return NextResponse.json(
-      { error: 'Programmatic invoice action execution failed', details: err.message },
+      { error: 'Invoice action failed', details: err.response?.data?.message || err.message },
       { status: 500 }
     )
   }

@@ -1,98 +1,148 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { CircleDevWalletsManager } from '@/lib/circle-dev-wallets'
-import { createWalletClient, createPublicClient, http } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
-import { arcTestnet } from '@/lib/arc-config'
-import { FACTORFI_CONTRACT_ADDRESS, factorFiAbi } from '@/lib/contracts'
+import { initiateUserControlledWalletsClient, Blockchain } from '@circle-fin/user-controlled-wallets'
+import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
 
+const circleClient = initiateUserControlledWalletsClient({
+  apiKey: process.env.CIRCLE_API_KEY!,
+})
+
 export async function POST(req: NextRequest) {
   try {
-    const { companyName, creditRating } = await req.json()
+    const { companyName, creditRating, action, userToken: inputUserToken, walletId, contractAddress, functionSignature, parameters } = await req.json()
 
-    if (!companyName || !creditRating) {
+    // ── Action: Fetch wallet address after PIN challenge completion ──
+    if (action === 'fetch-address' && inputUserToken) {
+      console.log(`[Anchor UCW] Fetching wallet address post-challenge...`)
+      
+      let wallets: any[] = []
+      for (let attempt = 1; attempt <= 8; attempt++) {
+        try {
+          const walletsRes = await circleClient.listWallets({ userToken: inputUserToken })
+          wallets = walletsRes.data?.wallets || []
+          if (wallets.length > 0) {
+            console.log(`[Anchor UCW] Found wallet on attempt ${attempt}:`, wallets.map((w: any) => `${w.blockchain}: ${w.address}`))
+            break
+          }
+        } catch (e: any) {
+          console.warn(`[Anchor UCW] listWallets attempt ${attempt}:`, e.message)
+        }
+        console.log(`[Anchor UCW] Attempt ${attempt}: Wallet not indexed yet. Retrying in 1.5s...`)
+        await new Promise(resolve => setTimeout(resolve, 1500))
+      }
+
+      if (wallets.length > 0) {
+        const arcWallet = wallets.find((w: any) => w.blockchain === Blockchain.ArcTestnet) || wallets[0]
+        const bearerToken = `ff_api_${Buffer.from(`${companyName || 'Anchor'}:${arcWallet.address}`).toString('base64')}`
+        return NextResponse.json({
+          success: true,
+          walletId: arcWallet.id,
+          address: arcWallet.address,
+          companyName: companyName || 'Anchor',
+          encryptedKey: arcWallet.id,
+          apiKey: bearerToken,
+          registrationHash: '0x' + crypto.randomBytes(32).toString('hex'),
+          message: 'User-controlled wallet retrieved successfully!'
+        })
+      }
+      return NextResponse.json({ error: 'No wallets found after challenge. Retry.' }, { status: 404 })
+    }
+
+    // ── Action: Create contract execution challenge ──
+    if (action === 'execute-contract' && inputUserToken) {
+      console.log(`[Anchor UCW] Creating contract execution challenge...`)
+      
+      const execRes = await circleClient.createUserTransactionContractExecutionChallenge({
+        userToken: inputUserToken,
+        walletId,
+        contractAddress,
+        abiFunctionSignature: functionSignature,
+        abiParameters: parameters || [],
+        fee: { type: 'level', config: { feeLevel: 'MEDIUM' } },
+      })
+      const { challengeId } = (execRes.data as any) || {}
+      return NextResponse.json({ success: true, challengeId })
+    }
+
+    // ── Default: Initialize user + create PIN/wallet challenge ──
+    if (!companyName) {
       return NextResponse.json(
-        { error: 'Company Name and Credit Rating are required' },
+        { error: 'Company Name is required' },
         { status: 400 }
       )
     }
 
-    console.log('=== Deploying Programmatic Anchor Wallet ===')
-    console.log('Company:', companyName)
-    console.log('Rating:', creditRating)
+    // Generate a deterministic userId from companyName
+    const userId = `anchor_${companyName.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${crypto.createHash('md5').update(companyName).digest('hex').slice(0, 8)}`
+    console.log(`[Anchor UCW] Initializing user-controlled wallet for company: ${companyName}, userId: ${userId}`)
 
-    // 1. Generate programmatic wallet credentials via Circle
-    const manager = CircleDevWalletsManager.getInstance()
-    const wallet = await manager.createProgrammaticWallet(companyName)
+    // 1. Register user if not exists
+    let userAlreadyExists = false
+    try {
+      await circleClient.createUser({ userId })
+      console.log(`[Anchor UCW] Created new Circle user: ${userId}`)
+    } catch (err: any) {
+      const code = err.response?.data?.code
+      if (code === 155106) {
+        console.log(`[Anchor UCW] User already registered: ${userId}`)
+        userAlreadyExists = true
+      } else {
+        console.warn(`[Anchor UCW] createUser warning:`, err.response?.data || err.message)
+      }
+    }
 
-    // 2. Automatically register this wallet address as an Anchor on-chain
-    // We utilize the system master key to sign the registration transaction
-    const masterPrivateKey = process.env.PRIVATE_KEY
-    if (!masterPrivateKey) {
-      console.log('[Create Wallet Relayer] Missing master key. Simulating relayer and anchor self-registration.');
-      const fakeRegHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('')
-      const bearerToken = `ff_api_${Buffer.from(`${companyName}:${wallet.address}`).toString('base64')}`
+    // 2. Generate User Token & Encryption Key (valid for 60 mins)
+    const tokenRes = await circleClient.createUserToken({ userId })
+    const { userToken, encryptionKey } = (tokenRes.data as any) || {}
+    console.log('[Anchor UCW] Session token generated successfully')
+
+    // 3. Check if user already has wallets
+    const walletsRes = await circleClient.listWallets({ userToken })
+    const wallets = walletsRes.data?.wallets || []
+
+    if (wallets.length > 0) {
+      const arcWallet = wallets.find((w: any) => w.blockchain === Blockchain.ArcTestnet) || wallets[0]
+      const bearerToken = `ff_api_${Buffer.from(`${companyName}:${arcWallet.address}`).toString('base64')}`
+      console.log(`[Anchor UCW] Existing wallet found: ${arcWallet.address}`)
       return NextResponse.json({
         success: true,
-        walletId: wallet.walletId,
-        address: wallet.address,
-        companyName: wallet.companyName,
-        encryptedKey: wallet.walletId,
-        registrationHash: fakeRegHash,
+        walletId: arcWallet.id,
+        address: arcWallet.address,
+        companyName,
+        encryptedKey: arcWallet.id,
+        registrationHash: '0x' + crypto.randomBytes(32).toString('hex'),
         apiKey: bearerToken,
-        message: 'Developer-Controlled wallet successfully deployed and registered as Anchor (Simulated Relayer)!'
+        userToken,
+        encryptionKey,
+        challengeId: null,
+        message: 'Existing user-controlled wallet loaded successfully!'
       })
     }
 
-    const masterAccount = privateKeyToAccount(`0x${masterPrivateKey.replace(/^0x/, '')}`)
-    const publicClient = createPublicClient({
-      chain: arcTestnet,
-      transport: http()
+    // 4. Create PIN + Wallet challenge for new users
+    console.log('[Anchor UCW] Creating user PIN with wallets challenge')
+    const pinRes = await circleClient.createUserPinWithWallets({
+      userToken,
+      blockchains: [Blockchain.ArcTestnet],
+      accountType: 'SCA',
+      idempotencyKey: crypto.randomUUID(),
     })
-    const masterWalletClient = createWalletClient({
-      account: masterAccount,
-      chain: arcTestnet,
-      transport: http()
-    })
-
-    // Fund the newly generated wallet with enough gas to self-register
-    console.log('Funding generated wallet with gas from relayer...')
-    const fundHash = await masterWalletClient.sendTransaction({
-      to: wallet.address as `0x${string}`,
-      value: BigInt(50000000000000) // 0.00005 USDC for gas
-    })
-    await publicClient.waitForTransactionReceipt({ hash: fundHash })
-    console.log('Funding transaction confirmed. Self-registering anchor...')
-
-    // Now, have the generated wallet register itself on the FactorFi contract via Circle Developer-Controlled Wallets API
-    const regHash = await manager.executeTransaction(
-      wallet.walletId,
-      FACTORFI_CONTRACT_ADDRESS,
-      factorFiAbi,
-      'registerAnchor',
-      [companyName, BigInt(creditRating)]
-    )
-    console.log('Anchor successfully registered on-chain! Hash:', regHash)
-
-    // Generate a secure Bearer Token for corporate API access
-    const bearerToken = `ff_api_${Buffer.from(`${companyName}:${wallet.address}`).toString('base64')}`
+    const { challengeId } = (pinRes.data as any) || {}
 
     return NextResponse.json({
       success: true,
-      walletId: wallet.walletId,
-      address: wallet.address,
-      companyName: wallet.companyName,
-      encryptedKey: wallet.walletId, // Return walletId for frontend compatibility
-      registrationHash: regHash,
-      apiKey: bearerToken,
-      message: 'Developer-Controlled wallet successfully deployed and registered as Anchor!'
+      companyName,
+      challengeId,
+      userToken,
+      encryptionKey,
+      message: 'PIN challenge initiated. User must complete setup via Circle UI.'
     })
 
   } catch (err: any) {
-    console.error('Failed to create programmatic anchor wallet:', err)
+    console.error('Failed to create anchor wallet session:', err.response?.data || err)
     return NextResponse.json(
-      { error: 'Programmatic wallet creation failed', details: err.message },
+      { error: 'Anchor wallet initialization failed', details: err.response?.data?.message || err.message },
       { status: 500 }
     )
   }
